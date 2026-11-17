@@ -12,18 +12,18 @@ _Release source: bc624831bf3d82e61596e4857ce77957017512af on main; tree identica
 
 ## Current focus
 
-**Wisp 2.2.15 and companion 1.14.12 are published and verified.** No local installation or client/Bridge restart was performed. No implementation, review or release watcher remains active.
+**Wisp 2.2.15 and companion 1.14.12 are published, verified and installed.** Existing clients/Bridge processes were not restarted. No implementation, review or release watcher remains active.
 
 ## Work contract
 
-- **Authority:** khitarashi requested both Claude authentication fixes, regression tests and CodeRabbit review while preserving provider settings/credentials, then authorized pushing PR238 and, on 2026-11-18, "ok merge and release?" Installation was not requested in this turn.
+- **Authority:** khitarashi requested both Claude authentication fixes, regression tests and CodeRabbit review while preserving provider settings/credentials, then authorized pushing PR238 and, on 2026-11-18, "ok merge and release?" khitarashi then explicitly requested installation of Wisp2.2.15 and companion1.14.12 while preserving provider settings and credentials.
 - **Execution/integration:** primary Codex implemented on fix/claude-auth-errors and merged [PR238](https://github.com/EstarinAzx/Wisp-Model-Router/pull/238) as f364b78483d9c3c69e6a50c25e0e557ffcedf45c. Release branch release/wisp-2.2.15 merged through [PR239](https://github.com/EstarinAzx/Wisp-Model-Router/pull/239); [v2.2.15](https://github.com/EstarinAzx/Wisp-Model-Router/releases/tag/v2.2.15) points to bc624831bf3d82e61596e4857ce77957017512af. GitHub renamed Wisp-Router to Wisp-Model-Router; old URLs redirect. Context is versioned. Preserve the unrelated flow edit.
 - **Review:** [[review-policy]]. Implementation checkpoint claude-auth-errors-20261117 passed **3/3** launches: first two skipped incorrectly in a linked worktree, third reviewed all11 files in an identical plain checkout with zero issues. Authoritative ledger remains .claude/claude-auth-errors/work.md in the fix-claude-auth-errors worktree. Release checkpoint release-wisp-2.2.15 passed **2/3** launches: all13 files and intended instructions covered, zero issues; first run warned about an external context file. Its ledger is .claude/wisp-2.2.15/work.md in the release-wisp-2-2-15 worktree, with a receipt copy in the main checkout. Both hosted PR checks passed. No pending review or paid-credit escalation. Prior completed review budgets remain closed.
-- **Evidence:** main checkout .claude/wisp-2.2.15/receipt.json and published-verification.json. Release PR workflow44072038024 and publication workflow44072850705 succeeded. All four tagged platform builds and smokes passed; merge tree equals reviewed release head.
+- **Evidence:** main checkout .claude/wisp-2.2.15/receipt.json, published-verification.json and installation.json. Release PR workflow44072038024 and publication workflow44072850705 succeeded. All four tagged platform builds and smokes passed; merge tree equals reviewed release head.
 - **Checks:** core2179 tests; terminal219 tests/1186 assertions; core/TUI typechecks; companion build/VSIX; all34 terminal screen baselines; local and downloaded Windows launcher/Responses/signed Desktop smokes. Baseline changes are version labels only. Lockfile changes are workspace version metadata only. No live inference or account refresh.
 - **Delivery:** all5 GitHub assets downloaded and SHA256-verified, including companion1.14.12. Main npm wisp-router2.2.15 tarball/integrity/version/platform pins verified; Windows, AppleSilicon and Linux optional npm metadata available. IntelMac optional npm2.2.15 remained unavailable; its verified GitHub binary is the installer's fallback. Initial main npm404 resolved without republishing. Slot remains1.7.6; Desktop protocol remains5.
 - **Preservation:** provider config SHA25645f936f4208c1a03773c2820fff32c837f5b8f3534f17f62f0cf74d139b7641f and auth SHA256a26e219ea12d02a1ae91b80a7b402f1bb3404f47e491409e8106ac3ed1de0d00 unchanged during release work. Flow edit SHA256abb6e8469eb6d665c3e2657daa450218425239e9019cf92c7fd733084f60414d unchanged. Original main checkout fast-forwarded; existing clients/Bridge were not stopped.
-- **Pending/checkpoint:** publication complete. Local installation and runtime activation are separate, unperformed actions; request fresh authorization if wanted. Last installation receipt remains the 2026-11-13 verification of terminal2.2.14/companion1.14.11, not a fresh assertion about current installations.
+- **Pending/checkpoint:** publication and installation complete. Global npm wisp-router2.2.15 and VS Code esarinazx.wisp1.14.12 verified; installed executable matches the GitHub asset SHA256, companion bundle matches the verified VSIX, and provider config/auth hashes are unchanged. No processes were restarted; runtime activation requires a Bridge restart / VS Code reload.
 
 ## Behavior and limits
 
@@ -39,7 +39,7 @@ Antigravity's separate generic429 is unresolved by this patch. Today's investiga
 
 ## Pick up here
 
-No active work. Do not republish. If installation is requested, use the verified2.2.15/1.14.12 release assets, preserve provider settings/credentials and distinguish installation from restarting an existing Bridge. Review exact receipts and current installed versions first.
+No active work. Do not repeat publication or installation. If asked to check activation, distinguish installed2.2.15/1.14.12 from already-running clients and Bridge processes. Preserve provider settings/credentials and the unrelated flow edit.
 
 ## Related
 
