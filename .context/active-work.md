@@ -12,7 +12,7 @@ _Release source: bc624831bf3d82e61596e4857ce77957017512af on main; tree identica
 
 ## Current focus
 
-**Wisp 2.2.15 and companion 1.14.12 are published, verified and installed.** Existing clients/Bridge processes were not restarted. No implementation, review or release watcher remains active.
+**Wisp 2.2.15 and companion 1.14.12 are published, verified and installed.** The Bridge was confirmed stopped on port41184 at 2026-11-18 01:06 NZDT; no process needed killing. VS Code reload remains unverified. No implementation, review or release watcher remains active.
 
 ## Work contract
 
@@ -23,7 +23,7 @@ _Release source: bc624831bf3d82e61596e4857ce77957017512af on main; tree identica
 - **Checks:** core2179 tests; terminal219 tests/1186 assertions; core/TUI typechecks; companion build/VSIX; all34 terminal screen baselines; local and downloaded Windows launcher/Responses/signed Desktop smokes. Baseline changes are version labels only. Lockfile changes are workspace version metadata only. No live inference or account refresh.
 - **Delivery:** all5 GitHub assets downloaded and SHA256-verified, including companion1.14.12. Main npm wisp-router2.2.15 tarball/integrity/version/platform pins verified; Windows, AppleSilicon and Linux optional npm metadata available. IntelMac optional npm2.2.15 remained unavailable; its verified GitHub binary is the installer's fallback. Initial main npm404 resolved without republishing. Slot remains1.7.6; Desktop protocol remains5.
 - **Preservation:** provider config SHA25645f936f4208c1a03773c2820fff32c837f5b8f3534f17f62f0cf74d139b7641f and auth SHA256a26e219ea12d02a1ae91b80a7b402f1bb3404f47e491409e8106ac3ed1de0d00 unchanged during release work. Flow edit SHA256abb6e8469eb6d665c3e2657daa450218425239e9019cf92c7fd733084f60414d unchanged. Original main checkout fast-forwarded; existing clients/Bridge were not stopped.
-- **Pending/checkpoint:** publication and installation complete. Global npm wisp-router2.2.15 and VS Code esarinazx.wisp1.14.12 verified; installed executable matches the GitHub asset SHA256, companion bundle matches the verified VSIX, and provider config/auth hashes are unchanged. No processes were restarted; runtime activation requires a Bridge restart / VS Code reload.
+- **Pending/checkpoint:** publication and installation complete. Global npm wisp-router2.2.15 and VS Code esarinazx.wisp1.14.12 verified; installed executable matches the GitHub asset SHA256, companion bundle matches the verified VSIX, and provider config/auth hashes are unchanged. No processes were restarted. User subsequently requested killing the Bridge; it was already stopped, with no listener on port41184 and no Wisp process. Wrap-up reconfirmed the port has no listener. All four task-owned review/CI shells exited successfully. Start the Bridge and reload VS Code when ready; no start is authorized by this wrap-up.
 
 ## Behavior and limits
 
@@ -39,7 +39,7 @@ Antigravity's separate generic429 is unresolved by this patch. Today's investiga
 
 ## Pick up here
 
-No active work. Do not repeat publication or installation. If asked to check activation, distinguish installed2.2.15/1.14.12 from already-running clients and Bridge processes. Preserve provider settings/credentials and the unrelated flow edit.
+No active work. Requested fixes, release and installation are complete. Do not repeat them or reopen passed review budgets. Bridge is stopped; starting it is the next user-directed action if desired. Preserve provider settings/credentials and the unrelated flow edit. Antigravity quota/auth recovery remains a separate task.
 
 ## Related
 
