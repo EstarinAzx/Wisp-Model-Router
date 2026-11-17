@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import OpenAI from 'openai';
 import { DesktopUpstreamError, desktopUpstreamFailure } from '../src/desktopUpstream';
+import { AnthropicAuth } from '../src/anthropicAuth';
 
 describe('signed upstream error trust boundary', () => {
+  it('preserves a local expired Anthropic credential failure as non-retryable 401', async () => {
+    vi.stubGlobal('fetch', async () => new Response('{}', { status: 400 }));
+    try {
+      const auth = new AnthropicAuth({ read: () => ({ accessToken: 'expired', refreshToken: 'refresh', expiresAt: 1 }),
+        write: () => { throw new Error('Unexpected credential write'); } }, async () => true, () => {});
+      let error: unknown;
+      try { await auth.current(); } catch (caught) { error = caught; }
+      expect(desktopUpstreamFailure(error)).toMatchObject({ status: 401, code: 'authentication_error', retryable: false });
+    } finally { vi.unstubAllGlobals(); }
+  });
   it.each([NaN, Infinity, 399, 600, 400.5, '401'])('rejects invalid status metadata %s', status => {
     const result = desktopUpstreamFailure(new DesktopUpstreamError(status as number, 'PRIVATE_CODE'));
     expect(result.status).toBe(502); expect(result.retryable).toBe(false);

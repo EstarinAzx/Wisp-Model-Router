@@ -29,6 +29,7 @@ import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import OpenAI from 'openai';
 import { desktopUpstreamFailure } from './desktopUpstream';
+import { AnthropicAuthenticationError } from './anthropic';
 import { forwardDesktopNative, desktopTargetIssue, DESKTOP_PROTOCOL, type NativeFetch } from './codexDesktop';
 import { DESKTOP_VOICE_CALL_PATH, forwardDesktopVoiceCall, forwardDesktopVoiceUpgrade, rejectVoiceUpgrade, type NativeVoiceRequest } from './codexDesktopVoice';
 import { codexCatalog } from './codexModels';
@@ -595,7 +596,7 @@ export const createBridgeServer = (deps: BridgeDeps) => {
       // The Messages SSE stream behind the Claude.ai sign-in (#40). Same "usable when signed in" shape as Codex.
       id: 'anthropic',
       matches: isAnthropicProvider,
-      classify: () => undefined,
+      classify: err => err instanceof AnthropicAuthenticationError ? err : undefined,
       open: async ({ parsed, provider, model, baseUrl, signal, signedDesktop }) => {
         const creds = await deps.anthropicCreds();
         if (!creds) return signedOut(provider);

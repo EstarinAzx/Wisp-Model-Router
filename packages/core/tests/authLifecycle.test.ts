@@ -63,9 +63,13 @@ describe.each(providers)('%s refresh lifecycle', provider => {
     let grants = 0;
     vi.stubGlobal('fetch', () => { grants++; return response.promise; });
     const store = memStore(), before = store.read(), auth = manager(provider, store);
-    const pending = Promise.all([auth.current(), auth.current()]);
+    const pending = Promise.allSettled([auth.current(), auth.current()]);
     response.resolve(new Response('refused', { status: 401 }));
-    expect(await pending).toEqual([before, before]);
+    const expected = provider === 'anthropic'
+      ? { status: 'rejected', reason: expect.objectContaining({ status: 401, type: 'authentication_error' }) }
+      : { status: 'fulfilled', value: before };
+    expect(await pending).toEqual([expected, expected]);
+    expect(store.read()).toEqual(before);
     expect(grants).toBe(1);
     vi.stubGlobal('fetch', async () => { grants++; return Response.json(renewed()); });
     expect((await auth.current())?.refreshToken).toBe('new-refresh');
@@ -107,7 +111,7 @@ describe.each(['anthropic', 'xai'] as const)('%s malformed refresh', provider =>
     ['blank refresh token', { access_token: 'new', expires_in: 3600, refresh_token: ' ' }],
     ['wrong refresh token type', { access_token: 'new', expires_in: 3600, refresh_token: 7 }],
   ])('retains usable credentials and retries after %s', async (_label, payload) => {
-    const store = memStore(), before = store.read(), auth = manager(provider, store);
+    const store = memStore({ ...initial(), expiresAt: Date.now() + 60_000 }), before = store.read(), auth = manager(provider, store);
     vi.stubGlobal('fetch', async () => Response.json(payload));
     expect(await auth.current()).toEqual(before);
     expect(store.read()).toEqual(before);

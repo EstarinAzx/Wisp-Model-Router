@@ -27,7 +27,7 @@ import { createServer } from 'http';
 import type { AddressInfo } from 'net';
 import { AuthStateChangedError } from './homeStore';
 import {
-  AnthropicCreds, AnthropicAccount, codeVerifier, codeChallenge, oauthState,
+  AnthropicCreds, AnthropicAccount, AnthropicAuthenticationError, codeVerifier, codeChallenge, oauthState,
   tokensToAnthropicCreds, shouldRefreshAnthropicToken, isAnthropicSignedIn,
   parseAnthropicBootstrap, mintAnthropicDeviceId,
 } from './catalog';
@@ -189,7 +189,7 @@ export class AnthropicAuth {
   // Two processes share auth.json (extension + TUI), so RE-READ before refreshing (#59): if the other
   // process already rotated the token, use its bundle instead of firing our stale refresh token.
   // Subscribers OMIT scopes on refresh so the backend re-expands them. A failed refresh is non-fatal —
-  // keep the existing creds (they may still work; the live call surfaces a 401).
+  // keep the existing creds while valid; current() refuses them once they expire.
   private refreshInFlight: Promise<AnthropicCreds> | undefined;
 
   private refreshIfNeeded = async (creds: AnthropicCreds): Promise<AnthropicCreds> => {
@@ -265,7 +265,11 @@ export class AnthropicAuth {
   // The credentials to use right now: the stored bundle, refreshed if near expiry. undefined = not signed in.
   current = async (): Promise<AnthropicCreds | undefined> => {
     const creds = this.store.read();
-    return creds ? this.refreshIfNeeded(creds) : undefined;
+    const current = creds ? await this.refreshIfNeeded(creds) : undefined;
+    if (current?.accessToken && current.expiresAt !== undefined && current.expiresAt <= Date.now()) {
+      throw new AnthropicAuthenticationError();
+    }
+    return current;
   };
 
   // Cheap signed-in check for UI/usability — read-only (no refresh round-trip).
