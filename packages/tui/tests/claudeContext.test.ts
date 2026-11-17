@@ -28,6 +28,26 @@ test.each([128000, 400000, 500000, 1000000])('child-only context configuration u
   expect(inherited.ANTHROPIC_MODEL).toBe('old');
 });
 
+test.each([{}, { ANTHROPIC_AUTH_TOKEN: 'old-token' }, { anthropic_auth_token: 'old-token' }])('launcher neutralizes competing auth in the child and settings: %j', inherited => {
+  const p = profile(), token = signClaudeContext(p, 'secret');
+  const before = { ...inherited };
+  const launch = buildClaudeContextLaunch(1234, 'secret', p, token, parseClaudeContextArgs([]), inherited);
+  for (const env of [launch.env, launch.settings.env]) {
+    expect(env.ANTHROPIC_API_KEY).toBe('secret');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('');
+    expect(env.anthropic_auth_token).toBeUndefined();
+  }
+  expect(inherited).toEqual(before);
+});
+
+test('explicit settings cannot reintroduce the competing authentication token', () => {
+  const p = profile(), token = signClaudeContext(p, 'secret');
+  for (const key of ['ANTHROPIC_AUTH_TOKEN', 'anthropic_auth_token']) {
+    expect(() => buildClaudeContextLaunch(1234, 'secret', p, token,
+      parseClaudeContextArgs(['--settings', JSON.stringify({ env: { [key]: 'secret' } })]), {})).toThrow(/conflict/i);
+  }
+});
+
 test('resume requires explicit selection and preserves native resume options', () => {
   expect(() => parseClaudeContextArgs(['--resume', 'session-id'])).toThrow(/--model/);
   expect(() => parseClaudeContextArgs(['-c'])).toThrow(/--model/);

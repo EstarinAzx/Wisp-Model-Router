@@ -79,7 +79,8 @@ export const buildClaudeContextLaunch = (port: number, secret: string, profile: 
     }
   }
   const base = buildClaudeLaunch(port, secret, []);
-  const protectedEnv: Record<string, string> = { ...base.env, ANTHROPIC_AUTH_TOKEN: secret,
+  // Empty overrides saved settings too; deleting the token here would let Claude restore it.
+  const protectedEnv: Record<string, string> = { ...base.env, ANTHROPIC_AUTH_TOKEN: '',
     ANTHROPIC_MODEL: profile.id, CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(profile.contextWindow), CLAUDE_CODE_DISABLE_1M_CONTEXT: '1',
     WISP_CLAUDE_CONTEXT_PROFILE: JSON.stringify(profile) };
   for (const [key, value] of Object.entries(explicitEnv)) {

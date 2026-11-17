@@ -10,6 +10,7 @@ import { ANTIGRAVITY_QUOTA_EXHAUSTED_CODE, antigravityImageRefusal } from '../sr
 import type { Provider } from '../src/catalog';
 import { codexCatalog } from '../src/codexModels';
 import { selectQuotaReading, type WispStatus } from '../src/index';
+import { AnthropicAuth } from '../src/anthropicAuth';
 
 // The Grok catalog row — id 'xai', the subscription-proxy base (grok-build routes there).
 const GROK: Provider = { id: 'xai', label: 'Grok', baseUrl: 'https://cli-chat-proxy.grok.com/v1', defaultModel: 'grok-build', apiKeyEnv: '', kind: 'xai-oauth' };
@@ -52,6 +53,35 @@ const makeDeps = (over: Partial<BridgeDeps>): BridgeDeps => ({
   accessSecret: () => 'secret',
   log: () => {},
   ...over,
+});
+
+describe('Anthropic authentication failures through every public Bridge door', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each(['/v1/messages', '/v1/chat/completions', '/v1/responses'].flatMap(path =>
+    ['upstream-401', 'expired-refresh'].map(failure => [path, failure])))('returns actionable 401 on %s for %s without retrying inference', async (path, failure) => {
+    const provider: Provider = { id: 'anthropic', label: 'Anthropic', kind: 'anthropic-oauth',
+      baseUrl: 'https://api.anthropic.com', defaultModel: 'claude-opus-5', apiKeyEnv: '' };
+    const initial = { accessToken: 'expired', refreshToken: 'refresh', expiresAt: 1 };
+    let inferenceCalls = 0, refreshCalls = 0;
+    vi.stubGlobal('fetch', async (url: unknown) => {
+      if (String(url).includes('/oauth/token')) { refreshCalls++; return new Response('{}', { status: 400 }); }
+      inferenceCalls++;
+      return Response.json({ type: 'error', error: { type: 'authentication_error', message: 'OAuth access token has expired. private-upstream-detail' } }, { status: 401 });
+    });
+    const auth = new AnthropicAuth({ read: () => initial, write: () => { throw new Error('Unexpected credential write'); } }, async () => true, () => {});
+    await runServer(makeDeps({ providers: [provider], activeProviderId: () => 'anthropic',
+      anthropicSignedIn: async () => true,
+      anthropicCreds: failure === 'expired-refresh' ? auth.current : async () => ({ accessToken: 'rejected' }),
+    }), async port => {
+      const reply = await post(port, path, { model: 'anthropic', stream: true,
+        ...(path === '/v1/responses' ? { input: 'hi', store: false } : { max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] }) });
+      expect(reply.status, reply.body).toBe(401);
+      expect(JSON.parse(reply.body).error).toMatchObject({ type: 'authentication_error', message: expect.stringMatching(/sign in/i) });
+      expect(reply.body).not.toContain('private-upstream-detail');
+    });
+    expect(inferenceCalls).toBe(failure === 'upstream-401' ? 1 : 0);
+    expect(refreshCalls).toBe(failure === 'expired-refresh' ? 1 : 0);
+  });
 });
 
 describe('exact Codex routes through every public Bridge door', () => {

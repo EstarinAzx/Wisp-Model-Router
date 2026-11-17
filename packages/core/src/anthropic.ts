@@ -24,6 +24,16 @@ import {
 
 // ----------------------------- Anthropic OAuth Provider (pure cores) ----------------------------- //
 
+// Shared by credential preflight and HTTP 401 responses; never infer auth failure from provider prose.
+export class AnthropicAuthenticationError extends Error {
+  readonly status = 401;
+  readonly code = 'authentication_error';
+  readonly type = 'authentication_error';
+  constructor() {
+    super('Anthropic authentication is unavailable. Sign in to Anthropic again through Wisp.');
+  }
+}
+
 // The Anthropic credential bundle. Like Codex it is OAuth-backed (no API key), but the token carries no
 // JWT exp — Anthropic returns expires_in, so the deadline is computed at exchange time and stored as an
 // absolute epoch-ms expiresAt. The impure anthropicAuth.ts owns the OAuth/IO.

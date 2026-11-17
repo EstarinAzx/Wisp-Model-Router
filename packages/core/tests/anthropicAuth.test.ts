@@ -12,6 +12,33 @@ const memStore = (initial?: AnthropicCreds) => {
   };
 };
 
+describe('AnthropicAuth expired-credential protection', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(['http', 'network', 'invalid-json', 'invalid-token', 'no-refresh'])('rejects an expired token after %s refresh failure without changing credentials', async failure => {
+    const initial = { accessToken: 'expired', expiresAt: Date.now() - 1000,
+      ...(failure === 'no-refresh' ? {} : { refreshToken: 'keep-refresh' }) };
+    const store = memStore(initial);
+    vi.stubGlobal('fetch', async () => {
+      if (failure === 'network') throw new Error('offline');
+      if (failure === 'invalid-json') return new Response('invalid');
+      if (failure === 'invalid-token') return Response.json({ expires_in: 3600 });
+      return new Response('{}', { status: 400 });
+    });
+    const auth = new AnthropicAuth(store, async () => true, () => {});
+    await expect(auth.current()).rejects.toMatchObject({ status: 401, message: expect.stringMatching(/sign in/i) });
+    expect(store.read()).toEqual(initial);
+  });
+
+  it('keeps a still-valid token when proactive refresh fails', async () => {
+    const initial = { accessToken: 'valid', refreshToken: 'keep-refresh', expiresAt: Date.now() + 120_000 };
+    const store = memStore(initial);
+    vi.stubGlobal('fetch', async () => new Response('{}', { status: 503 }));
+    expect(await new AnthropicAuth(store, async () => true, () => {}).current()).toEqual(initial);
+    expect(store.read()).toEqual(initial);
+  });
+});
+
 describe('fetchAnthropicBootstrap', () => {
   afterEach(() => vi.unstubAllGlobals());
 
