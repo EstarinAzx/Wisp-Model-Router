@@ -4,6 +4,17 @@ All notable changes to **Wisp** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.12] - 2026-11-18
+
+### Fixed
+
+- Reject already-expired Anthropic credentials after failed refresh, and return actionable HTTP 401 authentication errors through the shared Bridge instead of retryable 502 errors. Still-valid credentials remain usable after a proactive refresh failure.
+
+### Surfaces
+
+- **Terminal/npm: 2.2.15**, **companion VSIX: 1.14.12**, **wisp-slot: unchanged at 1.7.6**. Both Bridge hosts receive the shared authentication-error fix; the launcher environment fix ships in the terminal package. Desktop protocol remains **5**.
+- Stored credentials and provider settings are preserved. See [verification and limits](../../docs/releases/v2.2.15.md). Restart an existing Bridge after installing the update.
+
 ## [1.14.11] - 2026-11-13
 
 ### Fixed

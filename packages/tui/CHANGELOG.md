@@ -6,6 +6,18 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Changes up to 2.0.10 are folded into the product changelog at
 `packages/vscode/CHANGELOG.md`.
 
+## [2.2.15] - 2026-11-18
+
+### Fixed
+
+- Clear the competing Anthropic auth token in launched Claude children and temporary settings, keeping local Bridge API-key authentication active.
+- Reject already-expired Anthropic credentials after failed refresh, and return actionable HTTP 401 authentication errors instead of retryable 502 errors. Still-valid credentials remain usable after a proactive refresh failure.
+
+### Surfaces
+
+- **Terminal/npm: 2.2.15**, **companion VSIX: 1.14.12**, **wisp-slot: unchanged at 1.7.6**. Both Bridge hosts receive the shared authentication-error fix; the launcher environment fix ships in the terminal package. Desktop protocol remains **5**.
+- Stored credentials and provider settings are preserved. See [verification and limits](../../docs/releases/v2.2.15.md). Restart an existing Bridge after installing the update.
+
 ## [2.2.14] - 2026-11-13
 
 ### Fixed
