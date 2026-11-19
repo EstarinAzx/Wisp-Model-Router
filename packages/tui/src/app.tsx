@@ -592,10 +592,11 @@ export const App = () => {
 
   return (
     <box width="100%" height="100%" alignItems="center" justifyContent="center">
-      <box width={panelCols} maxHeight="100%">
+      <box width={panelCols} maxWidth="100%" maxHeight="100%">
       {isHome ? <box marginBottom={artHeight >= 30 ? 2 : 1}>
         <Flight width={panelCols} height={artHeight} />
-      </box> : <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
+      </box> : <box flexDirection="row" justifyContent="space-between" flexShrink={0}
+        marginBottom={termHeight >= 30 ? 2 : termHeight >= 24 ? 1 : 0}>
         <text fg={FOREGROUND}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
         <text fg={FOREGROUND}>{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
       </box>}

@@ -153,6 +153,14 @@ const run = async (command: string) => {
 // later capture.
 
 await see('Type / for commands', 'input');
+// The native viewport can shrink before React receives its new dimensions.
+const { root, currentFocusedEditor } = setup.renderer;
+assert(currentFocusedEditor, 'the home command input must be focused');
+root.resize(42, 10);
+root.calculateLayout();
+assert(currentFocusedEditor.getLayoutNode().getComputedWidth() <= 42, 'the command input must fit during a live shrink');
+root.resize(100, 40);
+root.calculateLayout();
 // Resize the live app before driving the palette. The windowed wordmark spans 57 cells.
 for (const [width, height] of [[80, 24], [110, 34], [52, 24], [42, 10], [176, 44], [100, 40]]) {
   await reactAct(async () => setup.resize(width, height));
@@ -203,6 +211,7 @@ await see('(active)', 'providers');
 await reactAct(async () => setup.resize(80, 8));
 const compactProviders = await waitForFrame(f => f.split('\n')[0].length === 80 && f.includes('Providers'));
 assert(compactProviders.includes('OpenCode Go (active)'), 'the selected provider must fit in a one-row picker');
+assert(compactProviders.includes('Esc back') && compactProviders.includes('q quit'), 'the picker controls must fit below the selected provider');
 await arrow('down');
 await waitForFrame(f => f.includes('OpenCode Zen'));
 await arrow('up');
