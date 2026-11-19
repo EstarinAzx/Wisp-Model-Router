@@ -200,6 +200,15 @@ await press(() => mockInput.pressBackspace(), 'backspace');
 // /providers list + both menu payload kinds (keyed row with stored key, OAuth row signed in)
 await run('/providers');
 await see('(active)', 'providers');
+await reactAct(async () => setup.resize(80, 8));
+const compactProviders = await waitForFrame(f => f.split('\n')[0].length === 80 && f.includes('Providers'));
+assert(compactProviders.includes('OpenCode Go (active)'), 'the selected provider must fit in a one-row picker');
+await arrow('down');
+await waitForFrame(f => f.includes('OpenCode Zen'));
+await arrow('up');
+await reactAct(async () => setup.resize(100, 40));
+await waitForFrame(f => f.includes('opencode-go — key set'));
+
 await enter();
 await see('Use as Active Provider', 'provider-menu-keyed');
 await esc();

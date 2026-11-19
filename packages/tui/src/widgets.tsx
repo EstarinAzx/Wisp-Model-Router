@@ -94,8 +94,9 @@ export const ChoiceList = ({ options, height, selectedIndex, onChange, onSelect,
   const [highlight, setHighlight] = useState(selectedIndex ?? 0);
   const { height: terminalHeight } = useTerminalDimensions();
   const active = Math.min(selectedIndex ?? highlight, options.length - 1);
+  const visibleRows = Math.max(1, Math.min(height, terminalHeight - 7));
   return <select focused {...SELECT_COLORS} {...SELECT_MOUSE} showScrollIndicator
-    height={Math.max(1, Math.min(height, terminalHeight - 7))} showDescription={showDescription}
+    height={visibleRows} showDescription={visibleRows >= 2 && (showDescription ?? true)}
     selectedIndex={Math.max(0, active)} showSelectionIndicator={false}
     options={options.map((option, i) => ({ ...option, name: (i === active ? '› ' : '  ') + option.name }))}
     onChange={(i) => { setHighlight(i); onChange?.(i, options[i] ?? null); }}
