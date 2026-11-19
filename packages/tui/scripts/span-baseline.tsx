@@ -18,6 +18,8 @@
  * sandboxed store, stubbed network, stubbed OAuth sign-in, provider env keys scrubbed.
  */
 
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { sandbox } from './span-sandbox';
 import { readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -108,7 +110,14 @@ destroy = () => { reactAct(() => setup.renderer.destroy()); };
 const { mockInput, waitForFrame } = setup;
 
 const frames: Record<string, string[]> = {};
-const snap = (name: string) => { frames[name] = frameToLines(setup.captureSpans()); };
+const snap = (name: string) => {
+  const frame = setup.captureSpans();
+  for (const line of frame.lines) for (const span of line.spans) {
+    assert.equal(span.bg.toInts()[3], 0, `${name}: background must remain transparent`);
+    if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', `${name}: ${span.text}`);
+  }
+  frames[name] = frameToLines(frame);
+};
 
 // Wait until the Screen's marker text is on screen, then record it under the scenario name.
 const see = async (marker: string, name: string) => { await waitForFrame((f) => f.includes(marker), { maxPasses: 200 }); snap(name); console.log(`  ✓ ${name}`); };
@@ -144,10 +153,48 @@ const run = async (command: string) => {
 // later capture.
 
 await see('Type / for commands', 'input');
+// Resize the live app before driving the palette. The windowed wordmark spans 57 cells.
+for (const [width, height] of [[80, 24], [110, 34], [52, 24], [42, 10], [176, 44], [100, 40]]) {
+  await reactAct(async () => setup.resize(width, height));
+  const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('Type / for commands'));
+  assert(frame.includes('Bridge idle') && frame.includes('q quit'), 'Home footer must describe this listener and its exit key');
+  if (height === 10) assert(frame.includes('Wisp_'), 'short terminals use the compact wordmark');
+  // Hash only the visible logo cells from the approved native captures at 06d43e9.
+  const approved = new Map([
+    [80, '33a15ff0a3683ffda8a5463b2f6e4ecc5968088c76ffd8aad0e8ec70803379b4'],
+    [110, 'c7fdb8fd559c9b4b83b0d7f12633096988d76405f4b23dc77d368b88113a14b5'],
+    [176, '3fb0f806c56cac6fde05bf152f664c452e94ac466457cadf0f256d162afd0567'],
+  ]);
+  if (approved.has(width)) {
+    const lines = frame.split('\n').map(line => line.trimEnd());
+    const art = lines.slice(0, lines.findIndex(line => line.includes('BYOK model router'))).join('\n').replace(/^\n+|\n+$/g, '');
+    assert.equal(createHash('sha256').update(art).digest('hex'), approved.get(width), `Flight artwork at ${width} columns`);
+  }
+  const mark = new Set<number>();
+  for (const row of setup.captureSpans().lines) {
+    let column = 0;
+    for (const span of row.spans) {
+      assert.equal(span.bg.toInts()[3], 0, 'Home must preserve the terminal background');
+      if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', span.text);
+      for (const ch of span.text) {
+        if (span.fg.intent === 'default' && /[█▀▄]/.test(ch)) mark.add(column);
+        column++;
+      }
+    }
+  }
+  if (width === 110) assert.equal(Math.max(...mark) - Math.min(...mark) + 1, 57);
+}
+
 
 // palette with the suggestion list open
 await reactAct(async () => { await mockInput.typeText('/'); });
 await see('/providers', 'input-suggestions');
+await reactAct(async () => { await mockInput.typeText('zz'); });
+await waitForFrame(f => f.includes('No matching commands.'));
+await esc();
+await waitForFrame(f => f.includes('Type / for commands'));
+await enter();
+await waitForFrame(f => f.includes('/providers'));
 await press(() => mockInput.pressBackspace(), 'backspace');
 
 // /providers list + both menu payload kinds (keyed row with stored key, OAuth row signed in)
@@ -216,6 +263,24 @@ await enter();
 await see('Fetching models', 'route-model-loading');
 releaseModels();
 await see('stub-model-a', 'route-model-pick');
+await arrow('down');
+await enter();
+await see('Apply this route?', 'route-confirm');
+assert.equal(store.home.readConfig().routing?.families.opus?.model, 'minimax-m3');
+await esc();
+await see('stub-model-a', 'route-revise');
+await enter();
+await waitForFrame(f => f.includes('Apply this route?'));
+await enter();
+await see('Bind Claude subscription models', 'route-applied');
+assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
+await enter();
+gateModels();
+await enter();
+await waitForFrame(f => f.includes('Fetching models'));
+releaseModels();
+await waitForFrame(f => f.includes('stub-model-a'));
+
 await esc();
 await enter();
 await see('Route opus via', 'route-provider-family-again');

@@ -6,7 +6,7 @@
  *   - ./modelFetch: fetchModelOptions re-export — the fetch itself moved out with #123.
  *   - ./store: the shared ~/.wisp handle + Active-Provider read — key/model storage and the
  *     at-a-glance row statuses.
- *   - ./theme: PANEL/DIM/SELECT_COLORS — the shared look.
+ *   - ./theme: input and text colors — the shared look.
  *   - ./widgets: onSubmitText — the DOM-signature submit adapter.
  *
  * Data shapes:
@@ -29,8 +29,8 @@ import {
   type Provider, type EffortLevel,
 } from '@wisp/core';
 import { home, activeProvider } from './store';
-import { PANEL, DIM, SELECT_COLORS } from './theme';
-import { onSubmitText, SELECT_MOUSE } from './widgets';
+import { FOREGROUND, INPUT_COLORS } from './theme';
+import { ChoiceList, Panel, onSubmitText } from './widgets';
 
 // ----------------------------------------- Key + model storage ----------------------------------------- //
 
@@ -118,17 +118,10 @@ export { fetchModelOptions } from './modelFetch';
 
 // The Provider list — Enter opens the row's action menu (#106).
 export const ProvidersScreen = ({ onPick }: { onPick: (p: Provider) => void }) => (
-  <box {...PANEL} title="Providers" marginTop={1} flexDirection="column">
+  <Panel title="Providers">
     {/* select collapses to zero rows without an explicit height; an option is 2 rows with description */}
-    {/* the built-in ▶ indicator is off on every select — the glyph is ambiguous-width (double-wide
-        on common Windows fonts, smearing into the label); the highlight bar already marks the row */}
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
+    <ChoiceList
       height={Math.min(PROVIDERS.length * 2, 16)}
-      showSelectionIndicator={false}
-      showScrollIndicator
       options={PROVIDERS.map((p) => {
         // keyed rows get the same at-a-glance status the OAuth rows always had (#106)
         const auth = oauthStatus(p) || keyStatus(p);
@@ -144,7 +137,7 @@ export const ProvidersScreen = ({ onPick }: { onPick: (p: Provider) => void }) =
         if (p) onPick(p);
       }}
     />
-  </box>
+  </Panel>
 );
 
 // One Provider's action menu (#106). Storage actions apply here; sign-in/out are shell
@@ -158,14 +151,9 @@ export const ProviderMenuScreen = ({ provider, onDone, onSetKey, onSignIn, onSig
 }) => {
   const expectedLifetime = isGeminiApiProvider(provider) ? storedKey(provider) : undefined;
   return (
-  <box {...PANEL} title={provider.label} marginTop={1} flexDirection="column">
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
+  <Panel title={provider.label}>
+    <ChoiceList
       height={Math.min(menuRows(provider).length * 2, 16)}
-      showSelectionIndicator={false}
-      showScrollIndicator
       options={menuRows(provider)}
       onSelect={(_i, opt) => {
         switch (opt?.value) {
@@ -186,40 +174,35 @@ export const ProviderMenuScreen = ({ provider, onDone, onSetKey, onSignIn, onSig
         }
       }}
     />
-  </box>
+  </Panel>
   );
 };
 
 // /key with no argument — pick which keyed row gets the masked entry.
 export const KeyPickScreen = ({ onPick }: { onPick: (p: Provider) => void }) => (
-  <box {...PANEL} title="Set key for…" marginTop={1} flexDirection="column">
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
+  <Panel title="Set key for…">
+    <ChoiceList
       height={Math.min(keyedProviders().length * 2, 16)}
-      showSelectionIndicator={false}
-      showScrollIndicator
       options={keyedProviders().map((p) => ({ name: p.label, description: p.id, value: p.id }))}
       onSelect={(_i, opt) => {
         const p = PROVIDERS.find((x) => x.id === opt?.value);
         if (p) onPick(p);
       }}
     />
-  </box>
+  </Panel>
 );
 
 // Masked key entry — the shell's global keyboard handler feeds `secret`; only bullets render.
 export const KeyEntryScreen = ({ provider, secret }: { provider: Provider; secret: string }) => (
-  <box {...PANEL} title={`API key — ${provider.label}`} marginTop={1} flexDirection="column">
-    {isGeminiApiProvider(provider) && <text>Separate Gemini API credentials and billing. Saving starts a new credential lifetime.</text>}
-    <text wrapMode="none">{secret ? '•'.repeat(secret.length) : ''}<span fg={DIM}>{secret ? '' : 'Paste or type, Enter to save, Esc to cancel'}</span></text>
-  </box>
+  <Panel title={`API key — ${provider.label}`}>
+    {isGeminiApiProvider(provider) && <text fg={FOREGROUND}>Separate Gemini API credentials and billing. Saving starts a new credential lifetime.</text>}
+    <text fg={FOREGROUND} wrapMode="none">{secret ? '•'.repeat(secret.length) : ''}<span fg={FOREGROUND}>{secret ? '' : 'Paste or type, Enter to save, Esc to cancel'}</span></text>
+  </Panel>
 );
 
 // The /model fetch's parking line — the shell starter resolves it to pick or free entry.
 export const ModelLoadingScreen = ({ provider }: { provider: Provider }) => (
-  <text wrapMode="none" flexShrink={0} fg={DIM} marginTop={1}>Fetching models for {provider.label}…</text>
+  <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>Fetching models for {provider.label}…</text>
 );
 
 // Pick the Provider's remembered model from its curated/live list.
@@ -230,16 +213,11 @@ export const ModelPickScreen = ({ provider, options, onDone, onManual, onRefresh
   onRefresh: () => void;
   onDone: (message?: string) => void;
 }) => (
-  <box {...PANEL} title={`Model — ${provider.label}`} marginTop={1} flexDirection="column">
+  <Panel title={`Model — ${provider.label}`}>
     {/* descriptions are empty here — hide them so each model is one row */}
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
+    <ChoiceList
       height={Math.min(options.length + 2, 14)}
       showDescription={false}
-      showSelectionIndicator={false}
-      showScrollIndicator
       options={[...options.map((id) => ({
         name: id === resolveModel(home.readConfig().models ?? {}, provider) ? `${id} (current)` : id,
         description: '',
@@ -253,7 +231,7 @@ export const ModelPickScreen = ({ provider, options, onDone, onManual, onRefresh
         catch (error) { onDone(String(error)); }
       }}
     />
-  </box>
+  </Panel>
 );
 
 // No live list — free-typed model id; empty keeps the old one.
@@ -261,8 +239,8 @@ export const ModelFreeScreen = ({ provider, onDone }: {
   provider: Provider;
   onDone: (message?: string) => void;
 }) => (
-  <box {...PANEL} title={`Model — ${provider.label} (no live list — type an id)`} marginTop={1}>
-    <input
+  <Panel title={`Model — ${provider.label} (no live list — type an id)`}>
+    <input {...INPUT_COLORS}
       focused
       placeholder={provider.defaultModel || 'model id'}
       onSubmit={onSubmitText((value) => {
@@ -274,7 +252,7 @@ export const ModelFreeScreen = ({ provider, onDone }: {
         else onDone('Empty — model unchanged.');
       })}
     />
-  </box>
+  </Panel>
 );
 
 // /signin | /signout with no argument — pick which OAuth door.
@@ -283,14 +261,9 @@ export const OauthPickScreen = ({ action, onSignIn, onSignOut }: {
   onSignIn: (p: Provider) => void;
   onSignOut: (p: Provider) => void;
 }) => (
-  <box {...PANEL} title={action === 'signin' ? 'Sign in to…' : 'Sign out of…'} marginTop={1} flexDirection="column">
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
+  <Panel title={action === 'signin' ? 'Sign in to…' : 'Sign out of…'}>
+    <ChoiceList
       height={Math.min(oauthProviders().length * 2, 16)}
-      showSelectionIndicator={false}
-      showScrollIndicator
       options={oauthProviders().map((p) => ({ name: p.label, description: p.id, value: p.id }))}
       onSelect={(_i, opt) => {
         const p = oauthProviders().find((x) => x.id === opt?.value);
@@ -298,7 +271,7 @@ export const OauthPickScreen = ({ action, onSignIn, onSignOut }: {
         action === 'signin' ? onSignIn(p) : onSignOut(p);
       }}
     />
-  </box>
+  </Panel>
 );
 
 // The sign-in wait line — Esc routing (cancel, menu-origin return) lives in the shell. A device flow (#170)
@@ -306,13 +279,13 @@ export const OauthPickScreen = ({ action, onSignIn, onSignOut }: {
 // the server issues them it reads as the plain waiting line, so the screen covers both legs.
 export const SigninWaitScreen = ({ provider, device }: { provider: Provider; device?: { verificationUri: string; verificationUriComplete?: string; userCode: string } }) =>
   device ? (
-    <box {...PANEL} title={`${provider.label} sign-in`} marginTop={1} flexDirection="column">
-      <text wrapMode="none" flexShrink={0}>Open: {device.verificationUriComplete ?? device.verificationUri}</text>
-      <text wrapMode="none" flexShrink={0}>Code: {device.userCode}</text>
-      <text wrapMode="none" flexShrink={0} fg={DIM} marginTop={1}>Waiting for you to approve it there. Esc to cancel.</text>
-    </box>
+    <Panel title={`${provider.label} sign-in`}>
+      <text fg={FOREGROUND} wrapMode="none" flexShrink={0}>Open: {device.verificationUriComplete ?? device.verificationUri}</text>
+      <text fg={FOREGROUND} wrapMode="none" flexShrink={0}>Code: {device.userCode}</text>
+      <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>Waiting for you to approve it there. Esc to cancel.</text>
+    </Panel>
   ) : (
-    <text wrapMode="none" flexShrink={0} fg={DIM} marginTop={1}>
+    <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>
       {isKimiProvider(provider)
         ? `Asking ${provider.label} for a device code. Esc to cancel.`
         : `Browser opened — finish the ${provider.label} sign-in there. Esc to cancel.`}
@@ -321,14 +294,9 @@ export const SigninWaitScreen = ({ provider, device }: { provider: Provider; dev
 
 // Pick the stored reasoning effort — writes config here; navigation stays a callback.
 export const EffortPickScreen = ({ onDone, options, current }: { onDone: (message?: string) => void; options: string[]; current?: string }) => (
-  <box {...PANEL} title="Reasoning Effort (Codex + Anthropic)" marginTop={1} flexDirection="column">
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
+  <Panel title="Reasoning Effort (Codex + Anthropic)">
+    <ChoiceList
       height={Math.min(options.length * 2, 16)}
-      showSelectionIndicator={false}
-      showScrollIndicator
       options={options.map((e) => ({
         name: e === (current ?? DEFAULT_EFFORT) ? `${e} (current)` : e,
         description: '',
@@ -340,5 +308,5 @@ export const EffortPickScreen = ({ onDone, options, current }: { onDone: (messag
         catch (error) { onDone(String(error)); }
       }}
     />
-  </box>
+  </Panel>
 );

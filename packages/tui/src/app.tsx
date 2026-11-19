@@ -1,4 +1,4 @@
-// ---------------- app.tsx — the Wisp TUI: splash, slash palette, and the three MVP commands ---------------- //
+// ---------------- app.tsx — the Wisp TUI: Flight home, command palette and interactive screens ---------------- //
 
 /*
  * Depends on:
@@ -8,7 +8,7 @@
  *   - ./store: the shared ~/.wisp handle + OAuth managers (#63 — extracted so `wisp serve` shares them).
  *   - ./bridge: the TUI's Bridge host wiring (#63).
  *   - ./modes: the Mode union + RouteRow (#116 — extracted so Screen modules can type payloads).
- *   - ./theme: splash/colors/panel/select styling (#116 — the select-transparency landmine's home).
+ *   - ./theme: terminal foreground and accent colors.
  *   - ./widgets: wrapWords (#116) — the status row's hand-wrap; the other widgets live with their flows.
  *   - ./providerScreens: the ten provider-flow Screens + that flow's helpers (#117) — the
  *     shell imports the Screens plus fetchModelOptions, oauthProviders, saveKey.
@@ -39,7 +39,8 @@ import { home, activeProvider, codexAuth, anthropicAuth, xaiAuth, kimiAuth, anti
 import { createTuiBridge, ensureBridgeSecret, bridgeAddress, bridgePort } from './bridge';
 import type { Mode, RouteRow, RoutingSection } from './modes';
 import { logBackMode } from './modes';
-import { SPLASH, ACCENT, DIM } from './theme';
+import { ACCENT, FOREGROUND, RULE } from './theme';
+import { Flight, flightWidth } from './flight';
 import { wrapWords } from './widgets';
 import {
   fetchModelOptions, oauthProviders, saveKey,
@@ -49,7 +50,7 @@ import {
 import {
   routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS,
   RoutingScreen, RoutingSectionScreen, AliasNameScreen, AliasRenameScreen, RouteProviderScreen,
-  RouteModelLoadingScreen, RouteModelPickScreen, RouteModelFreeScreen,
+  RouteModelLoadingScreen, RouteConfirmScreen, RouteModelPickScreen, RouteModelFreeScreen,
 } from './routingScreens';
 import { PaletteScreen } from './paletteScreen';
 import { TestScreen, streamTestReply } from './testScreen';
@@ -119,12 +120,13 @@ export const App = () => {
   const statusGen = useRef(0);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderer = useRenderer();
-  // Live text columns for the hand-wrap helpers: terminal minus the outer padding (2+2) and the
-  // PANEL border (1+1). Floored so a pathological width can't produce empty wraps.
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
-  const panelCols = Math.max(termWidth - 6, 20);
-  // Palette suggestion rows sit outside any PANEL — only the outer padding (2+2) eats width.
-  const paletteCols = Math.max(termWidth - 4, 20);
+  const panelCols = flightWidth(termWidth);
+  const isHome = mode.kind === 'input' && line === '';
+  const isPicker = ['providers', 'provider-menu', 'key-pick', 'model-pick', 'oauth-pick', 'effort-pick',
+    'routing', 'routing-section', 'route-provider', 'route-model-pick'].includes(mode.kind);
+  const feedback = status ? wrapWords(status, panelCols) : [];
+  const artHeight = termHeight - (feedback.length ? feedback.length + 1 : 0);
 
   // Every non-copy status write bumps the gen so a pending ~1.5 s clear can't clobber it.
   const setStatus = useCallback((message: string) => {
@@ -496,6 +498,7 @@ export const App = () => {
   // not the raw prefix (Up/Down picked it). A required-arg command (<…>) completes into the input
   // instead of firing bare — it still owes an argument. Closed list falls through to runCommand. -----
   const submitLine = (raw: string) => {
+    if (raw === '' && inputRef.current) { inputRef.current.value = '/'; return; }
     const open = suggestSlash(raw);
     if (open.length === 0) { runCommand(raw); return; }
     const pick = open[Math.min(selIdx, open.length - 1)];
@@ -517,6 +520,7 @@ export const App = () => {
   // ----- global keys: Esc backs out of any screen (exits from the palette); key-entry is hand-read
   // here because <input> has no masked variant — chars land in `secret`, never on screen. -----
   useKeyboard((key) => {
+    if ((isHome || isPicker) && key.sequence === 'q' && !key.ctrl && !key.meta) { exitTui(); return; }
     // Up/Down steer the palette highlight while the suggestion list is open (wraps at the ends).
     if (mode.kind === 'input' && (key.name === 'up' || key.name === 'down')) {
       const n = suggestions.length;
@@ -534,7 +538,13 @@ export const App = () => {
       if (filled !== undefined && inputRef.current) inputRef.current.value = filled;
       return;
     }
+    if (mode.kind === 'route-confirm') {
+      if (key.name === 'return' || key.name === 'enter') applyRoute(mode.editor.row, mode.target);
+      if (key.name === 'escape') setMode({ ...mode.editor, draft: mode.target.model });
+      return;
+    }
     if (key.name === 'escape') {
+      if (mode.kind === 'input' && line && inputRef.current) { inputRef.current.value = ''; return; }
       // ponytail: for the BROWSER flows Esc detaches the UI only — the loopback waits out its own 5-min
       // timeout, and a flow the user still finishes in the browser lands tokens anyway. Kimi's poll does
       // get a real cancel (it would otherwise keep polling for 15 min and sign the user in after the fact).
@@ -581,21 +591,21 @@ export const App = () => {
   });
 
   return (
-    <box flexDirection="column" padding={2}>
-      {/* wrapMode none + flexShrink 0 on EVERY chrome row in this file — a wrapped row makes
-          opentui overlay every row after it on narrow terminals, and a short terminal makes yoga
-          shrink rows to zero height while they still paint (same garble). Clipping always beats
-          garbage. Long chrome copy that must survive narrow terminals is hand-wrapped via
-          wrapWords into per-line rows instead. Only real content keeps opentui wrapping: the
-          /test reply + its error text. */}
-      <text wrapMode="none" flexShrink={0} fg={ACCENT}>{SPLASH}</text>
-      {/* the green badge is THIS face's own listener only — start/stop re-render via their setStatus */}
-      <text wrapMode="none" flexShrink={0} fg={DIM}>BYOK model router · v{pkg.version}{bridge.isRunning() ? <span fg="#4ade80"> · bridge up :{bridgePort()}</span> : null}</text>
+    <box width="100%" height="100%" alignItems="center" justifyContent="center">
+      <box width={panelCols} maxHeight="100%">
+      {isHome ? <box marginBottom={artHeight >= 30 ? 2 : 1}>
+        <Flight width={panelCols} height={artHeight} />
+      </box> : <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
+        <text fg={FOREGROUND}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
+        <text fg={FOREGROUND}>{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
+      </box>}
+      {mode.kind === 'input' && !isHome && <text fg={FOREGROUND} marginY={1}><strong>Commands</strong></text>}
 
       {mode.kind === 'input' && (
         <PaletteScreen
           inputRef={inputRef}
-          cols={paletteCols}
+          cols={panelCols}
+          maxRows={Math.max(1, termHeight - 10 - feedback.length)}
           suggestions={suggestions}
           highlight={highlight}
           onInput={(value: string) => { setLine(value); setSelIdx(0); }}
@@ -650,8 +660,7 @@ export const App = () => {
 
       {mode.kind === 'help' && <HelpScreen onDone={backToInput} />}
 
-      {/* Reserve 18 rows for splash, caption, outer padding, panel frame/padding and close hint. */}
-      {mode.kind === 'info' && <InfoScreen title={mode.title} lines={mode.lines} cols={panelCols} maxRows={termHeight - 18} pending={!!mode.abort} />}
+      {mode.kind === 'info' && <InfoScreen title={mode.title} lines={mode.lines} cols={panelCols} maxRows={termHeight - 9 - feedback.length} pending={!!mode.abort} />}
 
       {mode.kind === 'routing' && (
         <RoutingScreen cols={panelCols} onPick={(section) => setMode({ kind: 'routing-section', section })} />
@@ -663,7 +672,7 @@ export const App = () => {
           cols={panelCols}
           onAddAlias={() => setMode({ kind: 'alias-name' })}
           onBind={bindClaudeFamilies}
-          onPickRow={(row) => setMode({ kind: 'route-provider', row })}
+          onPickRow={(row) => { setStatus(''); setMode({ kind: 'route-provider', row }); }}
         />
       )}
 
@@ -693,6 +702,7 @@ export const App = () => {
         />
       )}
 
+      {mode.kind === 'route-confirm' && <RouteConfirmScreen row={mode.editor.row} target={mode.target} />}
       {mode.kind === 'route-model-loading' && <RouteModelLoadingScreen provider={mode.provider} />}
 
       {mode.kind === 'route-model-pick' && (
@@ -702,7 +712,8 @@ export const App = () => {
           options={mode.options}
           onManual={() => setMode({ kind: 'route-model-free', row: mode.row, provider: mode.provider })}
           onRefresh={() => startRouteModel(mode.row, mode.provider, true)}
-          onApply={(target) => applyRoute(mode.row, target)}
+          draft={mode.draft}
+          onApply={(target) => setMode({ kind: 'route-confirm', editor: mode, target })}
         />
       )}
 
@@ -710,19 +721,32 @@ export const App = () => {
         <RouteModelFreeScreen
           row={mode.row}
           provider={mode.provider}
-          onApply={(target) => applyRoute(mode.row, target)}
+          draft={mode.draft}
+          onApply={(target) => setMode({ kind: 'route-confirm', editor: mode, target })}
           onEmpty={() => backToSection(sectionOf(mode.row), 'Empty — route unchanged.')}
         />
       )}
 
       {mode.kind === 'effort-pick' && <EffortPickScreen onDone={backToInput} options={mode.options} current={mode.current} />}
 
-      {/* feedback wraps by hand too — tips and bind confirmations outgrow narrow windows */}
-      {status !== '' && (
-        <box flexDirection="column" marginTop={1} flexShrink={0}>
-          {wrapWords(status, termWidth - 4).map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={DIM}>{l}</text>)}
-        </box>
-      )}
+      {mode.kind === 'input' && /^\/[^\s]*$/.test(line) && !suggestions.length &&
+        <text fg={FOREGROUND} marginTop={1}>No matching commands. Backspace to edit.</text>}
+      {mode.kind === 'input' && <box marginTop={1} flexDirection="row" justifyContent="space-between" flexShrink={0}>
+        {isHome ? <>
+          <text fg={FOREGROUND} wrapMode="none">{`v${pkg.version} · ${bridge.isRunning() ? 'Bridge up :' + bridgePort() : 'Bridge idle'}`}</text>
+          <text fg={FOREGROUND}>q quit</text>
+        </> : <text fg={FOREGROUND} wrapMode="none">{panelCols >= 48
+          ? '↑↓ select   Tab complete   Enter open   Esc home'
+          : '↑↓ select · Tab · Enter · Esc'}</text>}
+      </box>}
+      {isPicker && <box border={['top']} borderColor={RULE} marginTop={1} flexDirection="row" justifyContent="space-between">
+        <text fg={FOREGROUND} wrapMode="none">↑↓ select   Enter choose   Esc back</text>
+        <text fg={FOREGROUND}>q quit</text>
+      </box>}
+      {feedback.length > 0 && <box marginTop={1} flexShrink={0}>
+        {feedback.map((l, i) => <text key={i} wrapMode="none" fg={FOREGROUND}>{l}</text>)}
+      </box>}
+      </box>
     </box>
   );
 };

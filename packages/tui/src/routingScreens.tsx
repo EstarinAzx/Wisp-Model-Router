@@ -5,7 +5,7 @@
  *   - @wisp/core: PROVIDERS + FAMILY_KEYS + the pure routing-map read/edit helpers.
  *   - ./store: the shared ~/.wisp handle — the routing map lives in config.
  *   - ./modes: RouteRow — which map row a picker chain is editing.
- *   - ./theme: PANEL/DIM/SELECT_COLORS — the shared look.
+ *   - ./theme: input and text colors — the shared look.
  *   - ./widgets: wrapWords + WrapSelect + onSubmitText — the wrapped-select Screens.
  *
  * Data shapes:
@@ -23,22 +23,21 @@ import {
   PROVIDERS, FAMILY_KEYS, EMPTY_ROUTING_MAP, withAliasRenamed,
   type Provider, type RoutingMap, type FamilyKey, type Target,
 } from '@wisp/core';
+import { useTerminalDimensions } from '@opentui/react';
+import { ArtRows, flightWidth } from './flight';
+import { routeArt } from './flightArt';
 import { home } from './store';
 import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
-import { PANEL, DIM, SELECT_COLORS } from './theme';
-import { wrapWords, WrapSelect, onSubmitText, SELECT_MOUSE } from './widgets';
+import { FOREGROUND, INPUT_COLORS } from './theme';
+import { ChoiceList, Panel, wrapWords, WrapSelect, onSubmitText } from './widgets';
 
 // ----------------------------------------- Row helpers ----------------------------------------- //
 
 export const routingMap = (): RoutingMap => home.readConfig().routing ?? EMPTY_ROUTING_MAP;
 
 export const rowLabel = (row: RouteRow): string => (row.kind === 'family' ? row.family : row.name);
-
-// Border-title-safe label: opentui silently drops a whole title over one non-ASCII char, and alias
-// names are free text (the panel accepts anything) — replace the offenders, never lose the title.
-const titleLabel = (row: RouteRow): string => rowLabel(row).replace(/[^\x20-\x7e]/g, '?');
 
 const rowTarget = (map: RoutingMap, row: RouteRow): Target | undefined =>
   row.kind === 'family' ? map.families[row.family] : row.kind === 'codex-model'
@@ -69,10 +68,10 @@ export const RoutingScreen = ({ cols, onPick }: {
   cols: number;
   onPick: (section: RoutingSection) => void;
 }) => (
-  <box {...PANEL} title="Routing map" marginTop={1} flexDirection="column">
+  <Panel title="Routing map">
     {/* hand-wrapped into per-line rows — opentui's own wrap garbles everything below it */}
     {wrapWords("Points incoming model names at your Providers — Claude families, exact Codex models, and your own Aliases.", cols)
-      .map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={DIM}>{l}</text>)}
+      .map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{l}</text>)}
     <WrapSelect
       cols={cols}
       maxRows={12}
@@ -83,7 +82,7 @@ export const RoutingScreen = ({ cols, onPick }: {
       ]}
       onSelect={(_i, opt) => onPick(opt.value as RoutingSection)}
     />
-  </box>
+  </Panel>
 );
 
 // One section's rows — Family routes with the one-tap bind, or Aliases with add.
@@ -101,8 +100,8 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
     void loadCodexRoutingCatalog().then(result => { if (active) setCatalog(result); });
     return () => { active = false; };
   }, [section]);
-  return <box {...PANEL} title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'} marginTop={1} flexDirection="column">
-    {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={DIM}>{line}</text>)}
+  return <Panel title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'}>
+    {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{line}</text>)}
     {/* value encodes the row as kind:key — split at the FIRST colon, alias names may contain more */}
     {/* keyed by section so toggling families ↔ aliases can't reuse a stale selection */}
     <WrapSelect
@@ -131,7 +130,7 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
         onPickRow(v.startsWith('family:') ? { kind: 'family', family: key as FamilyKey } : { kind: v.startsWith('codex-model:') ? 'codex-model' : 'alias', name: key });
       }}
     />
-  </box>;
+  </Panel>;
 };
 
 // Name a new alias — precheck the Provider-id shadow rule while the name is still editable.
@@ -140,8 +139,8 @@ export const AliasNameScreen = ({ onBack, onStatus, onNamed }: {
   onStatus: (message: string) => void;
   onNamed: (name: string) => void;
 }) => (
-  <box {...PANEL} title="New alias name" marginTop={1}>
-    <input
+  <Panel title="New alias name">
+    <input {...INPUT_COLORS}
       focused
       placeholder="a bridged model name, e.g. fast"
       onSubmit={onSubmitText((value) => {
@@ -153,7 +152,7 @@ export const AliasNameScreen = ({ onBack, onStatus, onNamed }: {
         onNamed(name);
       })}
     />
-  </box>
+  </Panel>
 );
 
 // Rename an existing alias in place — Target kept, only the bridged name changes.
@@ -162,8 +161,8 @@ export const AliasRenameScreen = ({ name, onBack, onStatus }: {
   onBack: (message: string) => void;
   onStatus: (message: string) => void;
 }) => (
-  <box {...PANEL} title={`Rename alias ${titleLabel({ kind: 'alias', name })}`} marginTop={1}>
-    <input
+  <Panel title={`Rename alias ${name}`}>
+    <input {...INPUT_COLORS}
       focused
       placeholder={name}
       onSubmit={onSubmitText((value) => {
@@ -183,7 +182,7 @@ export const AliasRenameScreen = ({ name, onBack, onStatus }: {
         onBack(`Alias ${name} → ${next}.`);
       })}
     />
-  </box>
+  </Panel>
 );
 
 // Pick a row's Provider — alias rows lead with the rename/remove verbs.
@@ -194,10 +193,11 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
   onRename: (name: string) => void;
   onPick: (p: Provider) => void;
 }) => (
-  <box {...PANEL} title={`Route ${titleLabel(row)} via...`} marginTop={1} flexDirection="column">
+  <Panel title={`Route ${rowLabel(row)} via...`}>
+    <RouteTrace row={row} assigned={rowTarget(routingMap(), row)} />
     <WrapSelect
       cols={cols}
-      maxRows={14}
+      maxRows={12}
       options={[
         // Alias rows lead with the edit verbs (#79) — no scrolling past every Provider to
         // rename. Only for aliases already IN the map: the add-alias flow passes through here
@@ -222,60 +222,95 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
         if (p) onPick(p);
       }}
     />
-  </box>
+  </Panel>
 );
 
 // The route-model fetch's parking line — the shell starter resolves it to pick or free entry.
 export const RouteModelLoadingScreen = ({ provider }: { provider: Provider }) => (
-  <text wrapMode="none" flexShrink={0} fg={DIM} marginTop={1}>Fetching models for {provider.label}…</text>
+  <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>Fetching models for {provider.label}…</text>
+);
+
+const traces = [routeArt(0), routeArt(2)];
+const destination = (target?: Target) => target ? `${target.providerId} / ${target.model}` : 'No explicit route';
+
+const RouteTrace = ({ row, assigned, proposed }: { row: RouteRow; assigned?: Target; proposed?: Target }) => {
+  const { width, height } = useTerminalDimensions();
+  const wide = flightWidth(width) >= 72 && height >= 28;
+  const source = rowLabel(row);
+  const sourceCols = Math.min(18, Math.max(9, source.length + 2));
+  const cols = Math.max(1, flightWidth(width) - (wide ? sourceCols + 21 : 0));
+  const changed = proposed && (proposed.model !== assigned?.model || proposed.providerId !== assigned?.providerId);
+  const label = (text: string) => wrapWords(text, cols).map((line, i) =>
+    <text key={i} fg={FOREGROUND} height={1} wrapMode="none">{line}</text>);
+  return <box flexDirection={wide ? 'row' : 'column'}>
+    <box width={wide ? sourceCols : '100%'} justifyContent="center">
+      {wrapWords(source, wide ? sourceCols : cols).map((part, i) => <text key={i} fg={FOREGROUND}><strong>{part}</strong></text>)}
+    </box>
+    {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 1 : 0]} /></box>}
+    <box flexGrow={1} justifyContent={wide ? 'space-between' : 'flex-start'} paddingY={wide ? 1 : 0}>
+      <box>{label('Assigned   ' + destination(assigned))}</box>
+      {proposed && <box>{label('Proposed   ' + destination(proposed))}</box>}
+    </box>
+  </box>;
+};
+
+export const RouteConfirmScreen = ({ row, target }: { row: RouteRow; target: Target }) => (
+  <Panel title="Apply this route?">
+    <RouteTrace row={row} assigned={rowTarget(routingMap(), row)} proposed={target} />
+    <text fg={FOREGROUND} marginTop={1}>Enter apply   Esc revise</text>
+  </Panel>
 );
 
 // Pick the row's pinned model from the Provider's curated/live list.
-export const RouteModelPickScreen = ({ row, provider, options, onApply, onManual, onRefresh }: {
+export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, onManual, onRefresh }: {
   row: RouteRow;
   provider: Provider;
   options: string[];
+  draft?: string;
   onManual: () => void;
   onRefresh: () => void;
   onApply: (target: Target) => void;
-}) => (
-  <box {...PANEL} title={`Model for ${titleLabel(row)} - ${provider.label}`} marginTop={1} flexDirection="column">
-    {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
-      height={Math.min(options.length + 2, 14)}
-      showDescription={false}
-      showSelectionIndicator={false}
-      showScrollIndicator
-      options={[...options.map((id) => {
-        const t = rowTarget(routingMap(), row);
-        return {
-          name: t?.providerId === provider.id && t.model === id ? `${id} (current)` : id,
-          description: '',
-          value: id,
-        };
-      }), { name: 'Enter a model id…', description: '', value: ' manual' }, { name: 'Refresh models', description: '', value: ' refresh' }]}
-      onSelect={(_i, opt) => {
-        if (opt?.value === ' manual') { onManual(); return; }
-        if (opt?.value === ' refresh') { onRefresh(); return; }
-        if (opt) onApply({ providerId: provider.id, model: String(opt.value) });
-      }}
-    />
-  </box>
-);
+}) => {
+  const [index, setIndex] = useState(Math.max(0, options.indexOf(draft ?? '')));
+  const { height } = useTerminalDimensions();
+  const assigned = rowTarget(routingMap(), row);
+  const model = options[index];
+  return (
+    <Panel title={`Model for ${rowLabel(row)} - ${provider.label}`}>
+      <RouteTrace row={row} assigned={assigned} proposed={model ? { providerId: provider.id, model } : undefined} />
+      {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
+      <ChoiceList
+        height={Math.max(1, Math.min(options.length + 2, 14, height - (height >= 28 ? 13 : 8)))}
+        selectedIndex={index}
+        onChange={(next) => setIndex(next)}
+        showDescription={false}
+        options={[...options.map((id) => ({
+            name: assigned?.providerId === provider.id && assigned.model === id ? `${id} (current)` : id,
+            description: '',
+            value: id,
+        })), { name: 'Enter a model id…', description: '', value: ' manual' }, { name: 'Refresh models', description: '', value: ' refresh' }]}
+        onSelect={(_i, opt) => {
+          if (opt?.value === ' manual') { onManual(); return; }
+          if (opt?.value === ' refresh') { onRefresh(); return; }
+          if (opt) onApply({ providerId: provider.id, model: String(opt.value) });
+        }}
+      />
+    </Panel>
+  );
+};
 
 // No live list — free-typed model id for the row; empty keeps the old route.
-export const RouteModelFreeScreen = ({ row, provider, onApply, onEmpty }: {
+export const RouteModelFreeScreen = ({ row, provider, draft, onApply, onEmpty }: {
   row: RouteRow;
   provider: Provider;
   onApply: (target: Target) => void;
+  draft?: string;
   onEmpty: () => void;
 }) => (
-  <box {...PANEL} title={`Model for ${titleLabel(row)} - ${provider.label} (no live list - type an id)`} marginTop={1}>
-    <input
+  <Panel title={`Model for ${rowLabel(row)} - ${provider.label} (no live list - type an id)`}>
+    <input {...INPUT_COLORS}
       focused
+      value={draft}
       placeholder={provider.defaultModel || 'model id'}
       onSubmit={onSubmitText((value) => {
         const id = value.trim();
@@ -283,5 +318,5 @@ export const RouteModelFreeScreen = ({ row, provider, onApply, onEmpty }: {
         else onEmpty();
       })}
     />
-  </box>
+  </Panel>
 );

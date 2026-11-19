@@ -5,7 +5,7 @@
  *   - react: WrapSelect's selection/window state.
  *   - @opentui/react: text/box intrinsics + useKeyboard for the select's Up/Down/Enter.
  *   - @opentui/core (types): MouseEvent + SelectRenderable for the scrollbar-drag handlers.
- *   - ./theme: ACCENT/DIM — the widgets follow the shared look.
+ *   - ./theme: accent and terminal foreground — the widgets follow the shared look.
  *
  * Data shapes:
  *   - WrapOption: one selectable row — name + description + value.
@@ -14,10 +14,18 @@
  * Screens — every flow module shares them.
  */
 
-import { useRef, useState } from 'react';
-import { useKeyboard } from '@opentui/react';
-import type { MouseEvent, SelectRenderable } from '@opentui/core';
-import { ACCENT, DIM } from './theme';
+import { useRef, useState, type ReactNode } from 'react';
+import { useKeyboard, useTerminalDimensions, type SelectProps } from '@opentui/react';
+import type { MouseEvent, SelectRenderable, SelectOption } from '@opentui/core';
+import { ACCENT, FOREGROUND, SELECT_COLORS } from './theme';
+
+// A plain text heading also supports Unicode provider and alias names.
+export const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
+  <box flexDirection="column" marginTop={1} flexShrink={0}>
+    <text fg={FOREGROUND} wrapMode="none" height={1}><strong>{title}</strong></text>
+    <box marginTop={1}>{children}</box>
+  </box>
+);
 
 // ----------------------------------------- Select scrollbar drag ----------------------------------------- //
 
@@ -76,6 +84,24 @@ export const SELECT_MOUSE = {
   },
 } as const;
 
+// Keep the native select's keyboard, wheel and drag handling. Its built-in triangle smears
+// into the label on some Windows fonts, so draw a one-cell pointer in the option instead.
+type ChoiceListProps = Pick<SelectProps, 'onChange' | 'onSelect' | 'selectedIndex' | 'showDescription'> & {
+  options: SelectOption[];
+  height: number;
+};
+export const ChoiceList = ({ options, height, selectedIndex, onChange, onSelect, showDescription }: ChoiceListProps) => {
+  const [highlight, setHighlight] = useState(selectedIndex ?? 0);
+  const { height: terminalHeight } = useTerminalDimensions();
+  const active = Math.min(selectedIndex ?? highlight, options.length - 1);
+  return <select focused {...SELECT_COLORS} {...SELECT_MOUSE} showScrollIndicator
+    height={Math.max(1, Math.min(height, terminalHeight - 7))} showDescription={showDescription}
+    selectedIndex={Math.max(0, active)} showSelectionIndicator={false}
+    options={options.map((option, i) => ({ ...option, name: (i === active ? '› ' : '  ') + option.name }))}
+    onChange={(i) => { setHighlight(i); onChange?.(i, options[i] ?? null); }}
+    onSelect={(i) => onSelect?.(i, options[i] ?? null)} />;
+};
+
 // ----------------------------------------- Submit adapter ----------------------------------------- //
 
 // opentui's JSX inherits React's DOM intrinsics, so onSubmit must also satisfy the DOM form
@@ -87,10 +113,10 @@ export const onSubmitText = (handle: (value: string) => void) => (value: unknown
 
 // ----------------------------------------- Word wrap ----------------------------------------- //
 
-// opentui's own wrapMode="wrap" overlays every row that follows the wrapped one (the garble the
-// PANEL note describes), so long chrome copy is wrapped BY HAND: plain word-wrap into separate
+// opentui's own wrapMode="wrap" overlays every row that follows the wrapped one, so long chrome copy is wrapped BY HAND: plain word-wrap into separate
 // non-wrapping rows sized to the live terminal width. A word longer than a line hard-splits.
 export const wrapWords = (text: string, cols: number): string[] => {
+  cols = Math.max(1, cols);
   const lines: string[] = [];
   let line = '';
   for (const word of text.split(' ')) {
@@ -119,6 +145,8 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
   maxRows: number;
   onSelect: (index: number, option: WrapOption) => void;
 }) => {
+  const { height } = useTerminalDimensions();
+  maxRows = Math.max(1, Math.min(maxRows, height - 10));
   const [idx, setIdx] = useState(0);
   const top = useRef(0); // first visible item — persisted across renders, adjusted below
   // sel clamps a stale index (options can shrink under a reused instance) — used everywhere.
@@ -129,7 +157,7 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
     else if (key.name === 'down') setIdx((sel + 1) % options.length);
     else if (key.name === 'return' || key.name === 'enter') onSelect(sel, options[sel]);
   });
-  const items = options.map((o) => ({ o, lines: [o.name, ...wrapWords(o.description, cols - 1)] }));
+  const items = options.map((o) => ({ o, lines: [o.name, ...wrapWords(o.description, Math.max(1, cols - 2))] }));
   const rowsOf = (from: number, to: number) => items.slice(from, to + 1).reduce((n, it) => n + it.lines.length, 0);
   // Window: pull the view up to the selection, else push it down until the selection fits.
   if (sel < top.current) top.current = sel;
@@ -140,17 +168,17 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
     used += items[end].lines.length;
   return (
     <box flexDirection="column">
-      {top.current > 0 && <text wrapMode="none" flexShrink={0} fg={DIM}>{`  … ${top.current} more`}</text>}
+      {top.current > 0 && <text wrapMode="none" flexShrink={0} fg={FOREGROUND}>{`  … ${top.current} more`}</text>}
       {items.slice(top.current, end).flatMap(({ lines }, k) => {
         const i = top.current + k;
         const on = i === sel;
         return lines.map((l, j) => (
-          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} bg={on ? '#27272a' : undefined} fg={j === 0 ? (on ? ACCENT : undefined) : DIM}>
-            {` ${l}`}
+          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} fg={FOREGROUND}>
+            <span fg={ACCENT}>{on && j === 0 ? '› ' : '  '}</span>{on && j === 0 ? <strong>{l}</strong> : l}
           </text>
         ));
       })}
-      {end < items.length && <text wrapMode="none" flexShrink={0} fg={DIM}>{`  … ${items.length - end} more`}</text>}
+      {end < items.length && <text wrapMode="none" flexShrink={0} fg={FOREGROUND}>{`  … ${items.length - end} more`}</text>}
     </box>
   );
 };
