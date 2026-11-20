@@ -7,9 +7,7 @@ tags: [context, pick-up]
 
 # Pick up
 
-Wisp Flight 2.3.0 and VS Code companion 1.14.13 are published, installed and verified. Provider settings and credentials matched their pre-install hashes. The Bridge port (41184) was idle before and after installation. The existing edit to `.context/flows.md` is the user's.
-
-The release and installation are complete. [[active-work]] holds the release, review and installation receipts. No follow-up action is pending.
+Wisp 2.3.1 and companion 1.14.14 are published and verified. Read [[active-work]] for the release, review and artifact receipts. No active work is assigned. The last verified local installation remains Wisp 2.3.0 / companion 1.14.13; installation of the new release was not requested.
 
 ## Related
 

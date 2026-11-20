@@ -7,9 +7,21 @@ tags: [context, active-work, release]
 
 # Active Work
 
-Wisp Flight 2.3.0 and VS Code companion 1.14.13 are released and installed on this Windows machine. The installation check finished at 16:45 NZDT on 20 November 2026. This release and installation are complete.
+_Updated 2026-11-20 by Codex. Published commit `18a4ac4ee28b6c97ec430d2ce1fdeea6c1894258`._
 
-## Release and review
+## Wisp 2.3.1 published
+
+- Khitarashi explicitly authorized committing, pushing and releasing 2.3.1 in the 2026-11-20 pick-up chat, after requesting Claude Code stamp 2.1.329. The earlier handoff's publication hold is retained in the historical review receipt; this release was explicitly authorized. Live provider acceptance and supported-integration qualification were not performed.
+- [PR #241](https://github.com/EstarinAzx/Wisp-Model-Router/pull/241) merged to `18a4ac4ee28b6c97ec430d2ce1fdeea6c1894258`. [Tag v2.3.1](https://github.com/EstarinAzx/Wisp-Model-Router/releases/tag/v2.3.1) points there. Its tree exactly matches reviewed head `1a4057de0851ec07814aa9a1463fdacf52b84d1a`.
+- The user's README changes and all three replacement screenshots are included. The live README blob was verified; screenshot bytes match the previously verified `1890190` images. Terminal/npm is 2.3.1, companion VSIX is 1.14.14, slot remains 1.7.6 and Desktop protocol remains 5.
+- Final checks used pinned Bun 1.4.2: 2,180 core tests, 230 TUI tests, all package typechecks, Windows compiled launcher/Desktop smoke checks and VSIX checks passed. [Tag workflow 44705778577](https://github.com/EstarinAzx/Wisp-Model-Router/actions/runs/44705778577) passed all four native platform builds and publication.
+- All five GitHub asset digests and the main npm package integrity were verified. The published extension/webview bundles match the local build, including stamp 2.1.329. The downloaded Windows binary passed launcher/Desktop smoke checks. The published npm shell's actual GitHub download fallback passed in an isolated home; its binary hash and both launcher guards matched expectations.
+- All four optional npm platform packages were absent from registry metadata during verification; the main npm shell was published with correct version pins and latest tag. GitHub assets are available for every target. Windows fallback was exercised; other hosts' fallback downloads were not run locally.
+- Per [[review-policy]], stamp checkpoint `wisp-2.3.1-claude-stamp` and release checkpoint `release-wisp-2.3.1` passed at 1/3 CLI runs each with zero issues. The automatic PR review completed with no actionable comments. No review is pending.
+- Evidence lives under `out/release-2.3.1/` in the `feat/wisp-2.3.1` worktree: `review.json` links earlier checkpoints, `published/verification.json` records artifacts/npm, and `published/fallback-verification.json` records the Windows fallback. Use `git worktree list` to locate it. The primary checkout owns the versioned handoff.
+- Global installation was not requested or changed. The user's Bridge state, settings and credentials were preserved. Last verified installation remains 2.3.0 / 1.14.13 below.
+
+## Previous release and review (2.3.0)
 
 - Khitarashi authorized the release, then the local installation and wrap-up. The install instruction required preserving provider settings, credentials and the existing Bridge state.
 - [PR #240](https://github.com/EstarinAzx/Wisp-Model-Router/pull/240) merged to `3c05bc06db27c88a911131f5deefd5b3e35b4910`. Tag [v2.3.0](https://github.com/EstarinAzx/Wisp-Model-Router/releases/tag/v2.3.0) points to that commit. Its tree matches reviewed head `fe54fb67092bcd9feb6cd7c41680b9a588ed184e`.
@@ -18,13 +30,13 @@ Wisp Flight 2.3.0 and VS Code companion 1.14.13 are released and installed on th
 
 ## Local installation
 
-- The global npm command reports `wisp-router 2.3.0`. Its Windows optional-package binary matches the published SHA-256. VS Code lists `esarinazx.wisp@1.14.13`. The installed extension and webview bundles match the published VSIX.
+- At the previous installation check, the global npm command reported `wisp-router 2.3.0`. Its Windows optional-package binary matches the published SHA-256. VS Code lists `esarinazx.wisp@1.14.13`. The installed extension and webview bundles match the published VSIX.
 - Wisp's `config.json` and `auth.json` hashes matched before and after each installation. Port 41184 had no listener before installation, after each installer, or at final verification. No Bridge command or VS Code reload was issued. Activation inside an already-open editor window was not tested.
 - Installation evidence is in the primary checkout at `.claude/wisp-2.3.0/installation.json`. Publication checks are in the release worktree at `out/release-2.3.0/published/verification.json`. The unrelated edit to `.context/flows.md` was preserved.
 
 ## Pick up here
 
-No active task, watcher, pending reply or requested restart remains. Leave the Bridge in the user's chosen state. Earlier held work, including separate provider investigations, remains in [[release-follow-ups]].
+No active release work. Wait for khitarashi's next instruction. Install 2.3.1 only if requested; keep the Bridge in the user's chosen state. Earlier held work, including separate provider investigations, remains in [[release-follow-ups]].
 
 ## Related
 
