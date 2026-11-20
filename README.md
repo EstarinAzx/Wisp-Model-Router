@@ -58,7 +58,7 @@ In another terminal, start Claude Code with the alias you created (here, `grok`)
 claude-wisp --model grok
 ```
 
-Use `claude-wisp --model <alias>` to select an alias and apply its context budget. With no model argument, the launcher uses Wisp's Active Provider. To change targets, exit and resume with the new alias; see [context budgets and safe switching](docs/claude-wisp.md).
+Use `claude-wisp --model <alias>` to choose a starting alias, then switch with Claude Code's `/model` picker. Normal mode uses Claude's context estimates. Add `--exact-context` to apply one target's budget and pin that session; see [context budgets and switching](docs/claude-wisp.md).
 
 Prefer VS Code? [Install the extension](#vs-code-extension) and use your models directly in its chat and agent views. For Desktop, see the [experimental bridge setup](#chatgpt-desktop-codex-bridge--experimental) below.
 
@@ -110,7 +110,7 @@ Logs also include chats handled by VS Code. See [session logging](docs/session-l
 
 ## Routing aliases
 
-Give your models names you can remember. An **alias** such as `sol`, `terra`, or `grok` points to a specific provider and model. Create or change aliases with **`/routing`** in Wisp, then launch `claude-wisp --model <alias>`. Ordinary gateway sessions still list aliases under **From gateway**, with Claude Code's own context-budget assumptions.
+Give your models names you can remember. An **alias** such as `sol`, `terra`, or `grok` points to a specific provider and model. Create or change aliases with **`/routing`** in Wisp, then launch `claude-wisp --model <alias>`. The launcher lists aliases under **From gateway** and allows live switching, with Claude Code's own context-budget assumptions. Exact budgets are available through `--exact-context`, which pins the selected target.
 
 <p align="center">
   <img src="docs/routing-tui.png" alt="Custom routing table showing the Grok 4.7, Carbon, and Hydrogen aliases and their destinations" width="720">

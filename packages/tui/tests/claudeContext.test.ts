@@ -49,8 +49,8 @@ test('explicit settings cannot reintroduce the competing authentication token', 
 });
 
 test('resume requires explicit selection and preserves native resume options', () => {
-  expect(() => parseClaudeContextArgs(['--resume', 'session-id'])).toThrow(/--model/);
-  expect(() => parseClaudeContextArgs(['-c'])).toThrow(/--model/);
+  expect(() => parseClaudeContextArgs(['--exact-context', '--resume', 'session-id'])).toThrow(/--model/);
+  expect(() => parseClaudeContextArgs(['--exact-context', '-c'])).toThrow(/--model/);
   expect(parseClaudeContextArgs(['--resume=session-id', '--model=grok', '--fork-session'])).toMatchObject({ model: 'grok', args: ['--resume=session-id', '--fork-session'] });
   expect(parseClaudeContextArgs(['--system-prompt', '--model', '--model', 'grok'])).toMatchObject({ model: 'grok', args: ['--system-prompt', '--model'] });
   expect(() => parseClaudeContextArgs(['--model'])).toThrow();
@@ -63,7 +63,7 @@ test('explicit transport and context conflicts are refused while ordinary settin
     expect(() => buildClaudeContextLaunch(1234, 'secret', p, token,
       parseClaudeContextArgs(['--settings', JSON.stringify({ env })]), {})).toThrow(/conflict|compaction/i);
   }
-  expect(() => parseClaudeContextArgs(['--fallback-model', 'opus'])).toThrow(/relaunch|fallback/i);
+  expect(() => parseClaudeContextArgs(['--exact-context', '--fallback-model', 'opus'])).toThrow(/relaunch|fallback/i);
   expect(() => buildClaudeContextLaunch(1234, 'secret', p, token, parseClaudeContextArgs([]), { ANTHROPIC_CUSTOM_HEADERS: 'Authorization: Bearer other' })).toThrow();
   expect(() => buildClaudeContextLaunch(1234, 'secret', p, 'tampered', parseClaudeContextArgs([]), {})).toThrow();
   expect(() => buildClaudeContextLaunch(1234, 'secret', p, token, parseClaudeContextArgs(['--settings', '{"autoCompactEnabled":false}']), {})).toThrow(/compaction/i);
@@ -94,7 +94,7 @@ test('a nested launcher resolves its inherited generated identity back to the si
   expect(() => resolveClaudeContextSelection(p.id, {}, 'secret')).toThrow(/alias/i);
 });
 
-test.each([false, true])('launcher negotiates and cleans up through dispatcher=%s', async dispatched => {
+test.each([{ dispatched: false, exact: false }, { dispatched: true, exact: false }, { dispatched: false, exact: true }, { dispatched: true, exact: true }])('launcher modes clean up: %j', async ({ dispatched, exact }) => {
   const dir = mkdtempSync(join(tmpdir(), 'wisp-claude-launch-'));
   const p = profile(), token = signClaudeContext(p, 'secret');
   const captured = join(dir, 'capture.json');
@@ -106,7 +106,10 @@ test.each([false, true])('launcher negotiates and cleans up through dispatcher=%
   mkdirSync(join(dir, 'home'));
   writeFileSync(join(dir, 'home', 'auth.json'), JSON.stringify({ bridgeSecret: 'secret' }));
   let negotiated: unknown;
+  const requests: string[] = [];
   const server = createServer((req, res) => {
+    requests.push(req.url!);
+    if (req.url === '/v1/models') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ data: [] })); return; }
     if (req.url !== '/claude-code/context') { res.writeHead(401); res.end(); return; }
     let body = ''; req.on('data', c => { body += c; }); req.on('end', () => {
       negotiated = JSON.parse(body); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ profile: p, token }));
@@ -114,23 +117,82 @@ test.each([false, true])('launcher negotiates and cleans up through dispatcher=%
   });
   await new Promise<void>(done => server.listen(0, '127.0.0.1', done));
   const port = (server.address() as { port: number }).port;
-  writeFileSync(join(dir, 'home', 'config.json'), JSON.stringify({ bridge: { port } }));
+  writeFileSync(join(dir, 'home', 'config.json'), JSON.stringify({ provider: 'xai', routing: { families: {}, aliases: [{ name: 'grok', target: { providerId: 'xai', model: 'grok-4.7' } }] }, bridge: { port } }));
   try {
     const entry = dispatched ? [resolve(import.meta.dir, '../src/index.tsx'), 'claude-wisp'] : [resolve(import.meta.dir, '../src/claude-wisp.ts')];
-    const child = Bun.spawn([process.execPath, ...entry, '--model', 'grok', '-p', 'literal text'], {
+    const child = Bun.spawn([process.execPath, ...entry, ...(exact ? ['--exact-context'] : []), '--model', 'grok', '-p', 'literal text'], {
       cwd: dir, env: { ...process.env, WISP_HOME: join(dir, 'home'), PATH: [dir, dirname(node), join(process.env.SystemRoot ?? 'C:/Windows', 'System32')].join(delimiter),
-        ANTHROPIC_CUSTOM_HEADERS: '', DISABLE_COMPACT: '', DISABLE_AUTO_COMPACT: '', CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT: '' }, stdout: 'pipe', stderr: 'pipe',
+        CLAUDE_CODE_MAX_CONTEXT_TOKENS: '', WISP_CLAUDE_CONTEXT_PROFILE: '', ANTHROPIC_CUSTOM_HEADERS: '', DISABLE_COMPACT: '', DISABLE_AUTO_COMPACT: '', CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT: '' }, stdout: 'pipe', stderr: 'pipe',
     });
     const error = await new Response(child.stderr).text();
     expect(await child.exited, error).toBe(7);
     const output = JSON.parse(readFileSync(captured, 'utf8'));
-    expect(negotiated).toEqual({ model: 'grok' });
-    expect(output.window).toBe('500000');
-    expect(output.settings.model).toBe(p.id);
+    expect(negotiated).toEqual(exact ? { model: 'grok' } : undefined);
+    expect(requests).toEqual([exact ? '/claude-code/context' : '/v1/models']);
+    expect(output.window).toBe(exact ? '500000' : '');
+    expect(output.settings.model).toBe(exact ? p.id : 'claude-wisp-grok');
+    expect(output.settings.availableModels).toEqual(exact ? [p.id] : undefined);
     expect(output.args.slice(-2)).toEqual(['-p', 'literal text']);
     expect(existsSync(output.file)).toBe(false);
   } finally {
     await new Promise<void>(done => { server.closeAllConnections(); server.close(() => done()); });
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+
+test('normal parsing allows resume and fallback while exact mode retains restrictions', () => {
+  expect(parseClaudeContextArgs(['--continue', '--fallback-model', 'Sol'])).toMatchObject({ exactContext: false, resume: true, args: ['--continue', '--fallback-model', 'Sol'] });
+  expect(parseClaudeContextArgs(['--model', 'Astra', '--exact-context']).exactContext).toBe(true);
+  expect(() => parseClaudeContextArgs(['--fallback-model=Sol', '--exact-context'])).toThrow(/fallback/i);
+  expect(() => parseClaudeContextArgs(['--continue', '--exact-context'])).toThrow(/--model/);
+  expect(parseClaudeContextArgs(['--', '--exact-context'])).toMatchObject({ exactContext: false, args: ['--', '--exact-context'] });
+});
+
+test('normal launch leaves the alias picker and native budgets unrestricted', () => {
+  const parsed = parseClaudeContextArgs(['--model', 'claude-wisp-Astra', '--settings', '{"permissions":{"deny":["Bash(rm *)"]}}']);
+  const launch = buildClaudeContextLaunch(1234, 'secret', undefined, undefined, parsed, { ANTHROPIC_AUTH_TOKEN: 'old', PATH: 'tools' });
+  expect(launch.settings.availableModels).toBeUndefined();
+  expect(launch.settings.enforceAvailableModels).toBeUndefined();
+  expect(launch.settings.modelPicker).toBeUndefined();
+  expect(launch.settings.autoCompactEnabled).toBeUndefined();
+  expect(launch.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBeUndefined();
+  expect(launch.env.CLAUDE_CODE_DISABLE_1M_CONTEXT).toBeUndefined();
+  expect(launch.env.ANTHROPIC_AUTH_TOKEN).toBe('');
+  expect(launch.settings.permissions).toEqual(parsed.settings.permissions);
+  expect(launch.args).toEqual(['--model', 'claude-wisp-Astra']);
+});
+
+test('normal resume preserves native selection and explicit user context preferences', () => {
+  const parsed = parseClaudeContextArgs(['--continue', '--settings', '{"autoCompactWindow":120000}']);
+  const launch = buildClaudeContextLaunch(1234, 'secret', undefined, undefined, parsed, { CLAUDE_CODE_MAX_CONTEXT_TOKENS: '200000' });
+  expect(launch.args).toEqual(['--continue']);
+  expect(launch.settings.model).toBeUndefined();
+  expect(launch.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('200000');
+  expect(launch.settings.autoCompactWindow).toBe(120000);
+});
+
+test('normal nested launch removes inherited Wisp profile and budget without mutating its parent', () => {
+  const p = profile(), token = signClaudeContext(p, 'secret');
+  const inherited = { wisp_claude_context_profile: JSON.stringify(p), claude_code_max_context_tokens: '500000', claude_code_disable_1m_context: '1', anthropic_model: p.id, ANTHROPIC_CUSTOM_HEADERS: `X-Example: keep\nx-wisp-claude-context: ${token}` };
+  const before = structuredClone(inherited);
+  const launch = buildClaudeContextLaunch(1234, 'secret', undefined, undefined, parseClaudeContextArgs(['--model', 'claude-wisp-Sol']), inherited);
+  expect(launch.env.WISP_CLAUDE_CONTEXT_PROFILE).toBe('');
+  expect(launch.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('');
+  expect(launch.env.CLAUDE_CODE_DISABLE_1M_CONTEXT).toBe('');
+  expect(launch.env.claude_code_max_context_tokens).toBeUndefined();
+  expect(launch.env.ANTHROPIC_CUSTOM_HEADERS).toBe('X-Example: keep');
+  expect(launch.env.ANTHROPIC_MODEL).toBe('claude-wisp-Sol');
+  expect(inherited).toEqual(before);
+});
+
+test('normal mode retains transport conflict checks and explicit picker restrictions', () => {
+  for (const key of ['ANTHROPIC_AUTH_TOKEN', 'anthropic_base_url']) {
+    expect(() => buildClaudeContextLaunch(1234, 'secret', undefined, undefined,
+      parseClaudeContextArgs(['--settings', JSON.stringify({ env: { [key]: 'other' } })]), {})).toThrow(/conflict/i);
+  }
+  const parsed = parseClaudeContextArgs(['--settings', '{"availableModels":["claude-wisp-Astra"],"enforceAvailableModels":true}']);
+  const launch = buildClaudeContextLaunch(1234, 'secret', undefined, undefined, parsed, {});
+  expect(launch.settings.availableModels).toEqual(['claude-wisp-Astra']);
+  expect(launch.settings.enforceAvailableModels).toBe(true);
 });

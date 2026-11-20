@@ -10,7 +10,7 @@ Update the setup command and serving Bridge together: desktop protocol 5 require
 
 - `wisp` — the TUI: pick a Provider (OpenCode Go, Codex/ChatGPT, Anthropic/Claude.ai, OpenAI, Groq, Mistral, OpenRouter, Ollama, and more), set keys or OAuth sign-in, edit the Routing map, host the Bridge.
 - `wisp serve` — the headless Bridge: a local OpenAI-compatible **and** Anthropic-compatible endpoint that routes to whichever backend you configured.
-- `claude-wisp` — launch Claude Code pre-wired to the Bridge (env on the child only, argv passed through verbatim).
+- `claude-wisp` — launch Claude Code pre-wired to the Bridge (env on the child only, native alias switching by default; opt into a pinned target budget with `--exact-context`).
 - `codex-wisp` — launch installed native Codex through the Bridge's visible-history Responses subset. Version 2.1.5 adds Wisp Aliases alongside native picker choices and independent exact model routes. Codex owns tools and policy; saved configuration and authentication remain unchanged.
 
 ## Install
