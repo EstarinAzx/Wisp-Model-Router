@@ -7,6 +7,11 @@ export const RULE = '#80659b';
 export const SELECTION = '#3e2d52';
 export const SELECTED_TEXT = '#f3e8ff';
 
+export const bridgeInk = {
+  dark: { heading: '#f1edf3', value: '#cfb0fa', note: '#b0abb6', live: '#84cba3' },
+  light: { heading: '#29232e', value: '#61398b', note: '#574e60', live: '#235f40' },
+};
+
 export const commandFrameFits = (columns: number, rows: number) => columns >= 50 && rows >= 22;
 
 export const INPUT_COLORS = {

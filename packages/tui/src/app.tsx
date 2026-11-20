@@ -39,7 +39,7 @@ import { home, activeProvider, codexAuth, anthropicAuth, xaiAuth, kimiAuth, anti
 import { createTuiBridge, ensureBridgeSecret, bridgeAddress, bridgePort } from './bridge';
 import type { Mode, RouteRow, RoutingSection } from './modes';
 import { logBackMode } from './modes';
-import { ACCENT, FOREGROUND, RULE, commandFrameFits } from './theme';
+import { ACCENT, FOREGROUND, RULE, bridgeInk, commandFrameFits } from './theme';
 import { Flight, flightWidth } from './flight';
 import { wrapWords } from './widgets';
 import {
@@ -120,6 +120,14 @@ export const App = () => {
   const statusGen = useRef(0);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderer = useRenderer();
+  const [lightTerminal, setLightTerminal] = useState(renderer.themeMode === 'light');
+  useEffect(() => {
+    const update = () => setLightTerminal(renderer.themeMode === 'light');
+    renderer.on('theme_mode', update);
+    update();
+    return () => { renderer.off('theme_mode', update); };
+  }, [renderer]);
+  const bridgeColors = lightTerminal ? bridgeInk.light : bridgeInk.dark;
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
   const isHome = mode.kind === 'input' && line === '';
   const framed = !isHome && commandFrameFits(termWidth, termHeight);
@@ -601,7 +609,7 @@ export const App = () => {
       </box> : <box flexDirection="row" justifyContent="space-between" flexShrink={0}
         border={framed ? ['bottom'] : []} borderColor={RULE} marginBottom={0}>
         <text fg={FOREGROUND}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
-        <text fg={FOREGROUND}>{bridge.isRunning() && <span fg={ACCENT}>● </span>}{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
+        <text fg={mode.kind === 'bridge' ? bridgeColors.live : FOREGROUND}>{bridge.isRunning() && <span fg={mode.kind === 'bridge' ? bridgeColors.live : ACCENT}>● </span>}{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
       </box>}
       {mode.kind === 'input' && !isHome && <text fg={FOREGROUND} marginY={1}><strong>Commands</strong>{suggestions.length > 5 && <span>  {highlight + 1}/{suggestions.length}</span>}</text>}
 
@@ -657,7 +665,7 @@ export const App = () => {
         <TestScreen provider={mode.provider} model={mode.model} text={mode.text} phase={mode.phase} error={mode.error} />
       )}
 
-      {mode.kind === 'bridge' && <BridgeScreen address={mode.address} secret={mode.secret} cols={panelCols} />}
+      {mode.kind === 'bridge' && <BridgeScreen ink={bridgeColors} address={mode.address} secret={mode.secret} cols={panelCols} />}
 
       {mode.kind === 'logs' && <SessionListScreen onSelect={id => setMode({ kind: 'log', id })} />}
       {mode.kind === 'log' && <LogScreen id={mode.id} cols={panelCols} />}

@@ -117,6 +117,8 @@ const snap = (name: string) => {
       assert.equal(span.bg.toInts().join(','), '62,45,82,255', name + ': only the selection may paint a background');
       continue;
     }
+    if (name.startsWith('bridge') && ['207,176,250', '241,237,243', '176,171,182', '132,203,163']
+      .includes(span.fg.toInts().slice(0, 3).join(','))) continue;
     if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', `${name}: ${span.text}`);
   }
   frames[name] = frameToLines(frame);
@@ -360,7 +362,19 @@ assert(!setup.captureCharFrame().includes('/plugin marketplace'), 'setup starts 
 await reactAct(async () => { await mockInput.typeText('s'); });
 await see('/plugin marketplace', 'bridge-client-setup');
 const clientSetup = setup.captureCharFrame();
-assert(clientSetup.includes('Launch Claude Code') && clientSetup.includes('Manual setup only'));
+const advisorKey = 'CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1';
+assert(clientSetup.includes('Launch Claude Code') && !clientSetup.includes(advisorKey), 'manual setup starts folded');
+const inkOf = (text: string) => setup.captureSpans().lines.flatMap(line => line.spans)
+  .find(span => span.text.includes(text))?.fg.toInts().slice(0, 3).join(',');
+assert.equal(inkOf('Launch Claude Code'), '241,237,243');
+assert.equal(inkOf('claude-wisp [args…]'), '207,176,250');
+assert.equal(inkOf('Enabled automatically'), '176,171,182');
+assert.equal(inkOf('Bridge up'), '132,203,163');
+await reactAct(async () => { await mockInput.typeText('a'); });
+await see(advisorKey, 'bridge-manual-advisor');
+assert.equal(inkOf(advisorKey), '207,176,250');
+await reactAct(async () => { await mockInput.typeText('a'); });
+await waitForFrame(f => f.includes('Launch Claude Code') && !f.includes(advisorKey));
 assert(clientSetup.split('\n').filter(line => line.includes('claude-wisp [args…]')).every(line => !line.includes('Launch')));
 await reactAct(async () => { await mockInput.typeText('s'); });
 await waitForFrame(f => f.includes('Access secret'));

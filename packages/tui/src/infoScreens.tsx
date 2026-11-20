@@ -2,10 +2,10 @@
 
 // Session screens poll the shared core store, including external hosts.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { SLASH_COMMANDS, listLogSessions, readSessionLog, formatSessionLog } from '@wisp/core';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
-import { ACCENT, FOREGROUND } from './theme';
+import { ACCENT, FOREGROUND, type bridgeInk } from './theme';
 import { ChoiceList, Panel, wrapWords } from './widgets';
 import { sessionLabel, sessionDetail } from './bridgeLog';
 
@@ -26,50 +26,74 @@ export const InfoScreen = ({ title, lines, cols, maxRows, pending }: { title: st
 // ----------------------------------------- /bridge ----------------------------------------- //
 
 // The Bridge info panel — connection facts for the session's own listener.
-export const BridgeScreen = ({ address, secret, cols }: { address: string; secret: string; cols: number }) => {
-  const [setup, setSetup] = useState(false);
+export const BridgeScreen = ({ address, secret, cols, ink }: {
+  address: string; secret: string; cols: number; ink: typeof bridgeInk.dark;
+}) => {
+  const [page, setPage] = useState<'endpoints' | 'setup' | 'advisor'>('endpoints');
   const [revealed, setRevealed] = useState(false);
   const { height } = useTerminalDimensions();
   useKeyboard(key => {
     if (key.ctrl || key.meta) return;
-    if (key.name === 's') { setSetup(!setup); setRevealed(false); }
-    if (!setup && key.name === 'r') setRevealed(!revealed);
+    if (key.name === 's') {
+      setPage(page === 'endpoints' ? 'setup' : 'endpoints');
+      setRevealed(false);
+    }
+    if (key.name === 'a' && page !== 'endpoints') setPage(page === 'setup' ? 'advisor' : 'setup');
+    if (key.name === 'r' && page === 'endpoints') setRevealed(!revealed);
   });
-  const rows: { text: string; heading?: boolean }[] = [];
-  if (setup) {
-    const tasks = [
-      ['Launch Claude Code', 'claude-wisp [args…]'],
-      ['Install Wisp Slot in Claude Code', '/plugin marketplace add EstarinAzx/Wisp-Router',
-        'Shows which families use your routing map.'],
-      ['Advisor', 'Enabled automatically by claude-wisp.', 'Manual setup only:',
-        'CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1'],
-      ['Stop the Bridge', '/bridge off'],
-    ];
-    for (const [heading, ...details] of tasks) {
-      if (rows.length) rows.push({ text: '' });
-      for (const text of wrapWords(heading, cols - 1)) rows.push({ text, heading: true });
-      for (const detail of details) {
-        for (const line of wrapWords(detail, cols - 3)) rows.push({ text: '  ' + line });
+
+  const rows: ReactNode[] = [];
+  const width = Math.max(1, cols - 1);
+  const add = (text: string, role: 'heading' | 'value' | 'note') => {
+    if (role === 'heading' && rows.length) rows.push('');
+    const indent = role === 'heading' ? '' : '  ';
+    for (const line of wrapWords(text, width - indent.length)) {
+      rows.push(<span fg={ink[role]}>{indent}{role === 'heading' ? <strong>{line}</strong> : line}</span>);
+    }
+  };
+  let title = 'Bridge';
+  let keys: string;
+  if (page === 'setup') {
+    title = 'Bridge / Client setup';
+    add('Launch Claude Code', 'heading');
+    add('claude-wisp [args…]', 'value');
+    add('Install Wisp Slot in Claude Code', 'heading');
+    add('/plugin marketplace add EstarinAzx/Wisp-Router', 'value');
+    add('Shows which families use your routing map.', 'note');
+    add('Advisor', 'heading');
+    add('Enabled automatically by claude-wisp.', 'note');
+    add('Stop the Bridge', 'heading');
+    add('/bridge off', 'value');
+    keys = 'A manual Advisor setup · S back · Esc close';
+  } else if (page === 'advisor') {
+    title = 'Bridge / Advisor';
+    add('Manual Advisor setup', 'heading');
+    add('Set this when launching Claude Code manually.', 'note');
+    add('CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1', 'value');
+    keys = 'A back to setup · S endpoints · Esc close';
+  } else {
+    const endpoints = [['├─ OpenAI', address + '/v1'], ['└─ Anthropic', address],
+      ['Access secret', revealed ? secret : '••••••']];
+    for (const [label, value] of endpoints) {
+      if (label === 'Access secret') rows.push('');
+      if (16 + value.length <= width) {
+        rows.push(<><span fg={ink.note}>{label.padEnd(16)}</span><span fg={ink.value}>{value}</span></>);
+      } else {
+        rows.push(<span fg={ink.note}>{label}</span>);
+        add(value, 'value');
       }
     }
-  } else {
-    const endpoints = ['├─ OpenAI       ' + address + '/v1', '└─ Anthropic    ' + address,
-      '', 'Access secret   ' + (revealed ? secret : '••••••')];
-    for (const line of endpoints) {
-      for (const text of line.length < cols ? [line] : wrapWords(line, cols - 1)) rows.push({ text });
-    }
+    keys = (revealed ? 'R hide' : 'R reveal') + ' · S setup · Esc close';
   }
-  const visibleRows = Math.max(1, height - 10);
-  const content = rows.map(({ text, heading }, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>
-    {heading ? <strong>{text}</strong> : !setup && /^[├└]/.test(text)
-      ? <><span fg={ACCENT}>{text.slice(0, 2)}</span>{text.slice(2)}</> : text}
-  </text>);
-  return <Panel title={setup ? 'Bridge / Client setup' : 'Bridge'}>
-    <scrollbox focused scrollY height={Math.min(rows.length, visibleRows)}
-        scrollbarOptions={{ trackOptions: { backgroundColor: 'transparent', foregroundColor: ACCENT } }}>
-        {content}
-      </scrollbox>
-    <text fg={FOREGROUND} marginTop={1}>{setup ? (rows.length > visibleRows ? 'S back · ↑↓ scroll · Esc close' : 'S back · Esc close') : `R ${revealed ? 'hide' : 'reveal'} · S setup · Esc close`}</text>
+  const available = Math.max(1, height - 10);
+  const scroll = rows.length > available - wrapWords(keys, cols).length + 1;
+  const hints = wrapWords((scroll ? '↑↓ scroll · ' : '') + keys, cols);
+  return <Panel title={title}>
+    <scrollbox key={page} focused scrollY height={Math.min(rows.length, Math.max(1, available - hints.length + 1))}
+      scrollbarOptions={{ trackOptions: { backgroundColor: 'transparent', foregroundColor: ACCENT } }}>
+      {rows.map((row, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>{row}</text>)}
+    </scrollbox>
+    <box marginTop={1}>{hints.map((hint, i) => <text key={i} height={1} fg={ink.note}>{hint}</text>)}</box>
   </Panel>;
 };
 
