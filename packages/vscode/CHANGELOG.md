@@ -4,6 +4,12 @@ All notable changes to **Wisp** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.16] - 2026-11-21
+
+### Fixed
+
+- The Bridge stops after an Antigravity `RESOURCE_EXHAUSTED` response without a retry time. Claude Code receives the 429 and guidance to stop retrying that turn. [Release notes](../../docs/releases/v2.3.3.md)
+
 ## [1.14.15] - 2026-11-20
 
 ### Changed
