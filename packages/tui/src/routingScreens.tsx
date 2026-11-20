@@ -31,7 +31,7 @@ import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
 import { FOREGROUND, INPUT_COLORS } from './theme';
-import { ChoiceList, Panel, wrapWords, WrapSelect, onSubmitText } from './widgets';
+import { ChoiceList, Panel, wrapWords, WrapSelect, type WrapOption, onSubmitText } from './widgets';
 
 // ----------------------------------------- Row helpers ----------------------------------------- //
 
@@ -88,6 +88,12 @@ export const RoutingScreen = ({ cols, onPick }: {
   </Panel>;
 };
 
+// The TUI ships on Bun. Count terminal cells so wide alias names keep their columns.
+declare const Bun: {
+  stringWidth(text: string): number;
+  wrapAnsi(text: string, columns: number, options: { hard: boolean }): string;
+};
+
 // One section's rows — Family routes with the one-tap bind, or Aliases with add.
 export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPickRow }: {
   section: RoutingSection;
@@ -103,28 +109,41 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
     void loadCodexRoutingCatalog().then(result => { if (active) setCatalog(result); });
     return () => { active = false; };
   }, [section]);
+  const map = routingMap();
+  const sourceLabel = section === 'families' ? 'Family' : section === 'codex' ? 'Codex model' : 'Alias';
+  const wide = cols >= 46;
+  const sourceWidth = section === 'families' ? 10 : Math.min(22, Math.floor(cols / 3));
+  const destWidth = Math.max(1, cols - sourceWidth - 5);
+  const option = (name: string, target: string, value: string): WrapOption => {
+    const wrap = (text: string, width: number): string[] => Bun.wrapAnsi(text, Math.max(1, width), { hard: true }).split('\\n');
+    const source = wrap(name, wide ? sourceWidth : cols - 2);
+    const dest = wrap(target, wide ? destWidth : cols - 4);
+    const lines = wide ? Array.from({ length: Math.max(source.length, dest.length) }, (_, i) => {
+      const label = source[i] ?? '';
+      return label + ' '.repeat(Math.max(0, sourceWidth - Bun.stringWidth(label))) +
+        (i === 0 ? ' → ' : '   ') + (dest[i] ?? '');
+    }) : [...source, ...dest.map((line, i) => (i === 0 ? '↳ ' : '  ') + line)];
+    return { name, description: target, value, lines };
+  };
+  const routes = section === 'families'
+    ? FAMILY_KEYS.map(f => {
+        const target = map.families[f];
+        return option(f, target ? destination(target) : 'Active Provider (default)', 'family:' + f);
+      })
+    : section === 'aliases'
+      ? map.aliases.map(alias => option(alias.name, destination(alias.target), 'alias:' + alias.name))
+      : codexRoutingRows(map, catalog).map(row => option(row.name === row.id ? row.id : row.name + ' · ' + row.id,
+          row.description, 'codex-model:' + row.id));
+  if (section === 'families') routes.push({ group: 'Actions', name: 'Bind Claude subscription models',
+    description: '  Route all four families to Anthropic (Claude.ai).', value: ' bind' });
+  if (section === 'aliases') routes.push({ group: 'Actions', name: 'Add alias', description: '', value: 'add' });
   return <Panel title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'}>
     {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{line}</text>)}
-    {/* value encodes the row as kind:key — split at the FIRST colon, alias names may contain more */}
-    {/* keyed by section so toggling families ↔ aliases can't reuse a stale selection */}
-    <WrapSelect
-      key={section}
-      cols={cols}
-      maxRows={14}
-      options={section === 'families'
-        ? [
-            ...FAMILY_KEYS.map((f) => {
-              const t = routingMap().families[f];
-              return { name: f, description: t ? `${t.providerId} (${t.model})` : 'not routed — Active Provider answers', value: `family:${f}` };
-            }),
-            // ' bind' rides the same leading-space convention as ' clear'/' rename' — it can
-            // never collide with a family:/alias: row key.
-            { name: 'Bind Claude subscription models', description: 'route all four families to Anthropic (Claude.ai) in one go', value: ' bind' },
-          ]
-        : section === 'codex' ? codexRoutingRows(routingMap(), catalog).map(row => ({ name: row.name, description: `${row.id} — ${row.description}`, value: `codex-model:${row.id}` })) : [
-            ...routingMap().aliases.map((a) => ({ name: a.name, description: `alias — ${a.target.providerId} (${a.target.model})`, value: `alias:${a.name}` })),
-            { name: 'Add alias', description: 'name a new bridged model', value: 'add' },
-          ]}
+    <text fg={FOREGROUND} wrapMode="none" height={1}><strong>{wide
+      ? '  ' + sourceLabel.padEnd(sourceWidth) + '   Destination'
+      : '  ' + sourceLabel + ' → Destination'}</strong></text>
+    {section === 'aliases' && !map.aliases.length && <text fg={FOREGROUND}>  No aliases yet.</text>}
+    <WrapSelect key={section} cols={cols} maxRows={14} options={routes}
       onSelect={(_i, opt) => {
         const v = opt.value;
         if (v === 'add') { onAddAlias(); return; }

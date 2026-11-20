@@ -35,25 +35,41 @@ export const BridgeScreen = ({ address, secret, cols }: { address: string; secre
     if (key.name === 's') { setSetup(!setup); setRevealed(false); }
     if (!setup && key.name === 'r') setRevealed(!revealed);
   });
-  const lines = setup ? [
-    'Launch       claude-wisp [args…]',
-    'Wisp Slot    /plugin marketplace add EstarinAzx/Wisp-Router',
-    'Wisp Slot shows Claude Code which families use your Routing map.',
-    'Advisor      claude-wisp enables /advisor automatically. For manual setup, set CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1.',
-    'Stop         /bridge off',
-  ] : [
-    '├─ OpenAI       ' + address + '/v1',
-    '└─ Anthropic    ' + address,
-    '',
-    'Access secret   ' + (revealed ? secret : '••••••'),
-  ];
-  const rows = lines.flatMap(line => line.length < cols ? [line] : wrapWords(line, Math.max(1, cols - 1)));
+  const rows: { text: string; heading?: boolean }[] = [];
+  if (setup) {
+    const tasks = [
+      ['Launch Claude Code', 'claude-wisp [args…]'],
+      ['Install Wisp Slot in Claude Code', '/plugin marketplace add EstarinAzx/Wisp-Router',
+        'Shows which families use your routing map.'],
+      ['Advisor', 'Enabled automatically by claude-wisp.', 'Manual setup only:',
+        'CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1'],
+      ['Stop the Bridge', '/bridge off'],
+    ];
+    for (const [heading, ...details] of tasks) {
+      if (rows.length) rows.push({ text: '' });
+      for (const text of wrapWords(heading, cols - 1)) rows.push({ text, heading: true });
+      for (const detail of details) {
+        for (const line of wrapWords(detail, cols - 3)) rows.push({ text: '  ' + line });
+      }
+    }
+  } else {
+    const endpoints = ['├─ OpenAI       ' + address + '/v1', '└─ Anthropic    ' + address,
+      '', 'Access secret   ' + (revealed ? secret : '••••••')];
+    for (const line of endpoints) {
+      for (const text of line.length < cols ? [line] : wrapWords(line, cols - 1)) rows.push({ text });
+    }
+  }
+  const visibleRows = Math.max(1, height - 10);
+  const content = rows.map(({ text, heading }, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>
+    {heading ? <strong>{text}</strong> : !setup && /^[├└]/.test(text)
+      ? <><span fg={ACCENT}>{text.slice(0, 2)}</span>{text.slice(2)}</> : text}
+  </text>);
   return <Panel title={setup ? 'Bridge / Client setup' : 'Bridge'}>
-    <scrollbox focused scrollY height={Math.max(1, Math.min(rows.length, height - 8))}>
-      {rows.map((row, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>{!setup && /^[├└]/.test(row)
-          ? <><span fg={ACCENT}>{row.slice(0, 2)}</span>{row.slice(2)}</> : row}</text>)}
-    </scrollbox>
-    <text fg={FOREGROUND} marginTop={1}>{setup ? 'S back · ↑↓ scroll · Esc close' : `R ${revealed ? 'hide' : 'reveal'} · S setup · Esc close`}</text>
+    <scrollbox focused scrollY height={Math.min(rows.length, visibleRows)}
+        scrollbarOptions={{ trackOptions: { backgroundColor: 'transparent', foregroundColor: ACCENT } }}>
+        {content}
+      </scrollbox>
+    <text fg={FOREGROUND} marginTop={1}>{setup ? (rows.length > visibleRows ? 'S back · ↑↓ scroll · Esc close' : 'S back · Esc close') : `R ${revealed ? 'hide' : 'reveal'} · S setup · Esc close`}</text>
   </Panel>;
 };
 

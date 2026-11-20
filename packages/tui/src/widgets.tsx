@@ -139,7 +139,7 @@ export const wrapWords = (text: string, cols: number): string[] => {
 // so this renders plain non-wrapping rows itself (name + hand-wrapped description lines) with a
 // windowed view: variable-height items, selection kept visible within maxRows, dim "… N more"
 // marker rows when clipped. Keyboard mirrors the native select: Up/Down (wrapping), Enter fires.
-export type WrapOption = { name: string; description: string; value: string };
+export type WrapOption = { name: string; description: string; value: string; lines?: string[]; group?: string };
 export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
   options: WrapOption[];
   cols: number;
@@ -158,26 +158,30 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
     else if (key.name === 'down') setIdx((sel + 1) % options.length);
     else if (key.name === 'return' || key.name === 'enter') onSelect(sel, options[sel]);
   });
-  const items = options.map((o) => ({ o, lines: [o.name, ...wrapWords(o.description, Math.max(1, cols - 2))] }));
-  const rowsOf = (from: number, to: number) => items.slice(from, to + 1).reduce((n, it) => n + it.lines.length, 0);
+  const items = options.map((o) => ({ o, lines: o.lines ?? [o.name, ...wrapWords(o.description, Math.max(1, cols - 2))] }));
+  const rowHeight = (item: typeof items[number]) => item.lines.length + (item.o.group ? 1 : 0);
+  const rowsOf = (from: number, to: number) => items.slice(from, to + 1).reduce((n, it) => n + rowHeight(it), 0);
   // Window: pull the view up to the selection, else push it down until the selection fits.
   if (sel < top.current) top.current = sel;
   while (rowsOf(top.current, sel) > maxRows && top.current < sel) top.current++;
   // Fill downward until the row budget is spent (the selected item always shows, however tall).
   let end = top.current;
-  for (let used = 0; end < items.length && (end === top.current || used + items[end].lines.length <= maxRows); end++)
-    used += items[end].lines.length;
+  for (let used = 0; end < items.length && (end === top.current || used + rowHeight(items[end]) <= maxRows); end++)
+    used += rowHeight(items[end]);
   return (
     <box flexDirection="column">
       {top.current > 0 && <text wrapMode="none" flexShrink={0} fg={FOREGROUND}>{`  … ${top.current} more`}</text>}
-      {items.slice(top.current, end).flatMap(({ lines }, k) => {
+      {items.slice(top.current, end).flatMap(({ o, lines }, k) => {
         const i = top.current + k;
         const on = i === sel;
-        return lines.map((l, j) => (
-          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} bg={on && j === 0 ? SELECTION : undefined} fg={on && j === 0 ? SELECTED_TEXT : FOREGROUND}>
+        const heading = o.group && <text key={'group:' + o.value} height={1} fg={FOREGROUND}>
+          <span fg={ACCENT}>── </span><strong>{o.group}</strong>
+        </text>;
+        return [heading, ...lines.map((l, j) => (
+          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} bg={on && (o.lines || j === 0) ? SELECTION : undefined} fg={on && (o.lines || j === 0) ? SELECTED_TEXT : FOREGROUND}>
             <span fg={ACCENT}>{on && j === 0 ? '› ' : '  '}</span>{on && j === 0 ? <strong>{l}</strong> : l}
           </text>
-        ));
+        ))];
       })}
       {end < items.length && <text wrapMode="none" flexShrink={0} fg={FOREGROUND}>{`  … ${items.length - end} more`}</text>}
     </box>
