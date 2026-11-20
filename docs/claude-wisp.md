@@ -12,7 +12,7 @@ claude-wisp --model Astra
 claude-wisp --model "Grok 4.7"
 ```
 
-`--model` selects the starting target without locking it. A fresh launch without a selection starts on Wisp's Active Provider. The launcher also accepts Provider IDs and configured Claude family routes. Normal `--resume`, `--continue` and `--from-pr` can omit `--model`, leaving the saved selection to Claude; adding `--model` selects a different starting alias. Native fallback arguments remain available in normal mode.
+`--model` selects the starting target without locking it. A fresh launch without a selection starts on Wisp's Active Provider. The launcher also accepts Provider IDs and configured Claude family routes. Normal `--resume`, `--continue` and `--from-pr` leave selection to Claude when neither `--model` nor a `model` key in `--settings` is supplied. Either explicit form selects the starting alias and is forwarded as `--model`, replacing the saved selection; the `--model` argument takes precedence. Native fallback arguments remain available in normal mode.
 
 Gateway discovery refreshes when Claude starts and uses its native cache. Relaunch after adding an alias if the current picker has not discovered it yet. Existing user or managed model restrictions still apply.
 
