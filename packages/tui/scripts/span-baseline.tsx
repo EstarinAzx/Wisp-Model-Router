@@ -387,8 +387,17 @@ await run('/guide');
 await see('Wisp guide', 'guide-index');
 await enter();
 await see('Your first route', 'guide-first-route');
+assert.equal(inkOf('Pick a provider'), '241,237,243', 'guide prose uses the neutral reading color');
+assert.equal(inkOf('/providers'), '207,176,250', 'commands stand out in guide prose');
 await esc();
 await waitForFrame(f => f.includes('Wisp guide'));
+await highlightRow('Command reference');
+await enter();
+await waitForFrame(f => f.includes('Run slash commands'));
+assert.equal(inkOf('/key'), '207,176,250');
+assert.equal(inkOf('[provider]'), '176,171,182', 'argument hints are quieter than commands');
+assert.equal(inkOf('List the Provider catalog'), '241,237,243');
+await esc();
 await esc();
 
 // /help registry list

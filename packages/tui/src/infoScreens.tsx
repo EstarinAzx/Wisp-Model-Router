@@ -10,12 +10,13 @@ import { ChoiceList, Panel, wrapWords } from './widgets';
 import { sessionLabel, sessionDetail } from './bridgeLog';
 
 // Shared command output: hand-wrap before scrolling so narrow terminals retain every line.
-export const InfoScreen = ({ title, lines, cols, maxRows, pending, escLabel }: {
+export const InfoScreen = ({ title, lines, cols, maxRows, pending, escLabel, wrapParagraph = wrapWords }: {
   title: string; lines: string[]; cols: number; maxRows: number; pending?: boolean; escLabel?: string;
+  wrapParagraph?: (paragraph: string, width: number) => ReactNode[];
 }) => {
   const ink = useTuiInk();
   // Leave room for the native scrollbar.
-  const wrapped = lines.flatMap((line, i) => [...(i ? [''] : []), ...wrapWords(line, Math.max(cols - 1, 1))]);
+  const wrapped = lines.flatMap((line, i) => [...(i ? [''] : []), ...wrapParagraph(line, Math.max(cols - 1, 1))]);
   return (
     <Panel title={title}>
       <scrollbox focused scrollY height={Math.min(wrapped.length, Math.max(maxRows, 1))}
