@@ -215,12 +215,13 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
   onClear: () => void;
   onRename: (name: string) => void;
   onPick: (p: Provider) => void;
-}) => (
-  <Panel title={`Route ${rowLabel(row)} via...`}>
-    {useRouteTrace(row, rowTarget(routingMap(), row)).view}
+}) => {
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row));
+  return <Panel title={`Route ${rowLabel(row)} via...`}>
+    {trace.view}
     <WrapSelect
       cols={cols}
-      maxRows={12}
+      maxRows={Math.min(12, trace.pickerRows - 2)} // WrapSelect can show a “more” row at each end.
       options={[
         // Alias rows lead with the edit verbs (#79) — no scrolling past every Provider to
         // rename. Only for aliases already IN the map: the add-alias flow passes through here
@@ -245,8 +246,8 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
         if (p) onPick(p);
       }}
     />
-  </Panel>
-);
+  </Panel>;
+};
 
 // The route-model fetch's parking line — the shell starter resolves it to pick or free entry.
 export const RouteModelLoadingScreen = ({ provider }: { provider: Provider }) => (
@@ -290,7 +291,8 @@ const useRouteTrace = (row: RouteRow, assigned?: Target, proposed?: Target) => {
       {proposed && <box>{proposedLines}</box>}
     </box>
   </box>;
-  return { view, rows };
+  const chromeRows = commandFrameFits(width, height) ? 10 : 7;
+  return { view, pickerRows: height - chromeRows - rows };
 };
 
 export const RouteConfirmScreen = ({ row, target }: { row: RouteRow; target: Target }) => {
@@ -313,8 +315,6 @@ export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, o
   onApply: (target: Target) => void;
 }) => {
   const [index, setIndex] = useState(Math.max(0, options.indexOf(draft ?? '')));
-  const { width, height } = useTerminalDimensions();
-  const chromeRows = commandFrameFits(width, height) ? 10 : 7;
   const assigned = rowTarget(routingMap(), row);
   const model = options[index];
   const trace = useRouteTrace(row, assigned, model ? { providerId: provider.id, model } : undefined);
@@ -323,7 +323,7 @@ export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, o
       {trace.view}
       {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
       <ChoiceList
-        height={Math.max(1, Math.min(options.length + 2, 14, height - chromeRows - trace.rows))}
+        height={Math.max(1, Math.min(options.length + 2, 14, trace.pickerRows))}
         selectedIndex={index}
         onChange={(next) => setIndex(next)}
         showDescription={false}

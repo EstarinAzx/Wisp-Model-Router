@@ -292,6 +292,12 @@ assert(familyTable.indexOf('Actions') > familyTable.indexOf('fable'));
 assert(familyTable.indexOf('Actions') < familyTable.indexOf('Bind Claude subscription models'));
 await enter();
 await see('Route opus via', 'route-provider-family');
+await reactAct(async () => setup.resize(60, 22));
+await arrow('up'); // Wrap to the final provider action.
+const providerEnd = await waitForFrame(f => f.includes('Clear route'));
+assert(providerEnd.includes('Enter choose') && providerEnd.includes('q quit'), 'provider picker footer must fit below the last action');
+await arrow('down');
+await reactAct(async () => setup.resize(100, 40));
 gateModels();
 await enter();
 await see('Fetching models', 'route-model-loading');
