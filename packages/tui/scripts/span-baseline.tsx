@@ -18,6 +18,8 @@
  * sandboxed store, stubbed network, stubbed OAuth sign-in, provider env keys scrubbed.
  */
 
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { sandbox } from './span-sandbox';
 import { readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -56,6 +58,7 @@ writeFileSync(join(sandbox, 'auth.json'), JSON.stringify({
 
 // holdModels lets a scenario freeze the *-loading Screens open, then release into the pick Screen.
 let holdModels: Promise<void> | null = null;
+const stubModels = [{ id: 'stub-model-a' }, { id: 'stub-model-b' }];
 let releaseModels: () => void = () => {};
 const gateModels = () => { holdModels = new Promise((r) => { releaseModels = () => { holdModels = null; r(); }; }); };
 
@@ -65,7 +68,7 @@ globalThis.fetch = (async (input: unknown) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.endsWith('/models')) {
     if (holdModels) await holdModels;
-    return Response.json({ data: [{ id: 'stub-model-a' }, { id: 'stub-model-b' }] });
+    return Response.json({ data: stubModels });
   }
   if (url.endsWith('/chat/completions')) {
     return new Response(
@@ -107,8 +110,23 @@ const setup = await testRender(<App />, { width: 100, height: 40, kittyKeyboard:
 destroy = () => { reactAct(() => setup.renderer.destroy()); };
 const { mockInput, waitForFrame } = setup;
 
+const inkOf = (text: string) => setup.captureSpans().lines.flatMap(line => line.spans)
+  .find(span => span.text.includes(text))?.fg.toInts().slice(0, 3).join(',');
+
 const frames: Record<string, string[]> = {};
-const snap = (name: string) => { frames[name] = frameToLines(setup.captureSpans()); };
+const snap = (name: string) => {
+  const frame = setup.captureSpans();
+  for (const line of frame.lines) for (const span of line.spans) {
+    if (span.bg.toInts()[3] !== 0) {
+      assert.equal(span.bg.toInts().join(','), '62,45,82,255', name + ': only the selection may paint a background');
+      continue;
+    }
+    if (['207,176,250', '241,237,243', '176,171,182', '132,203,163']
+      .includes(span.fg.toInts().slice(0, 3).join(','))) continue;
+    if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', `${name}: ${span.text}`);
+  }
+  frames[name] = frameToLines(frame);
+};
 
 // Wait until the Screen's marker text is on screen, then record it under the scenario name.
 const see = async (marker: string, name: string) => { await waitForFrame((f) => f.includes(marker), { maxPasses: 200 }); snap(name); console.log(`  ✓ ${name}`); };
@@ -144,15 +162,70 @@ const run = async (command: string) => {
 // later capture.
 
 await see('Type / for commands', 'input');
+// The native viewport can shrink before React receives its new dimensions.
+const { root, currentFocusedEditor } = setup.renderer;
+assert(currentFocusedEditor, 'the home command input must be focused');
+root.resize(42, 10);
+root.calculateLayout();
+assert(currentFocusedEditor.getLayoutNode().getComputedWidth() <= 42, 'the command input must fit during a live shrink');
+root.resize(100, 40);
+root.calculateLayout();
+for (const [width, height] of [[80, 24], [110, 34], [52, 24], [42, 10], [176, 44], [100, 40]]) {
+  await reactAct(async () => setup.resize(width, height));
+  const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('Type / for commands'));
+  assert(frame.includes('Bridge idle') && frame.includes('q quit'), 'Home footer must describe this listener and its exit key');
+  if (height === 10) assert(frame.includes('Wisp_'), 'short terminals use the compact wordmark');
+  if (width >= 80 && height >= 21) {
+    const rows = frame.split('\n');
+    const art = rows.slice(0, rows.findIndex(row => row.includes('BYOK model router')))
+      .map(row => row.trimEnd()).filter(Boolean);
+    const inset = Math.min(...art.map(row => row.search(/\S/)));
+    const glyphs = art.map(row => row.slice(inset)).join('\n');
+    // The approved 80×24 reference, with only the outer window margin removed.
+    assert.equal(createHash('sha256').update(glyphs).digest('hex'),
+      'ba5193bfa52ed469464f1a3f3f6a69bdd5744516b8190c9b3a65cb7fad874345', 'Flight keeps the original windowed flame and lettering at every larger size');
+    const inks = new Set(setup.captureSpans().lines.flatMap(row => row.spans
+      .filter(span => span.text.trim()).map(span => span.fg.toInts().slice(0, 3).join(','))));
+    for (const tone of ['173,119,239', '211,167,255', '255,240,255']) {
+      assert(inks.has(tone), 'the Lantern must preserve each original flame layer');
+    }
+  }
+}
+
 
 // palette with the suggestion list open
 await reactAct(async () => { await mockInput.typeText('/'); });
 await see('/providers', 'input-suggestions');
+const selectionBand = () => setup.captureSpans().lines.filter(line => line.spans.some(span =>
+  span.bg.toInts().join(',') === '62,45,82,255')).map(line => line.spans.map(span => span.text).join('')).join('\n');
+const palette = setup.captureCharFrame();
+assert(palette.includes('╭') && palette.includes('╯'), 'the command palette has a visible frame');
+assert(selectionBand().includes('/providers'), 'the focused command has a selection bar');
+assert(!palette.includes('/signout'), 'only a short window of commands should appear');
+assert(!palette.includes('API-key Provider'), 'other commands should not show their help text');
+await reactAct(async () => { await mockInput.typeText('zz'); });
+await waitForFrame(f => f.includes('No matching commands.'));
+await esc();
+await waitForFrame(f => f.includes('Type / for commands'));
+await enter();
+await waitForFrame(f => f.includes('/providers'));
 await press(() => mockInput.pressBackspace(), 'backspace');
 
 // /providers list + both menu payload kinds (keyed row with stored key, OAuth row signed in)
 await run('/providers');
 await see('(active)', 'providers');
+await reactAct(async () => setup.resize(80, 24));
+await waitForFrame(f => f.includes('OpenCode Go (active)') && f.includes('Esc back') && f.includes('╯'));
+await reactAct(async () => setup.resize(80, 8));
+const compactProviders = await waitForFrame(f => f.split('\n')[0].length === 80 && f.includes('Providers'));
+assert(compactProviders.includes('OpenCode Go (active)'), 'the selected provider must fit in a one-row picker');
+assert(compactProviders.includes('Esc back') && compactProviders.includes('q quit'), 'the picker controls must fit below the selected provider');
+await arrow('down');
+await waitForFrame(f => f.includes('OpenCode Zen'));
+await arrow('up');
+await reactAct(async () => setup.resize(100, 40));
+await waitForFrame(f => f.includes('opencode-go — key set'));
+
 await enter();
 await see('Use as Active Provider', 'provider-menu-keyed');
 await esc();
@@ -207,15 +280,56 @@ await esc();
 // /routing chain: overview → families section → row picker → model loading/pick/free
 await run('/routing');
 await see('Routing map', 'routing');
+assert(selectionBand().includes('Claude Code'));
+await arrow('down');
+assert(selectionBand().includes('Codex'));
+await arrow('up');
 await enter();
 await see('Bind Claude subscription models', 'routing-families');
+const familyTable = setup.captureCharFrame();
+assert(familyTable.split('\n').some(line => line.includes('opus') && line.includes('opencode-go / minimax-m3')));
+assert(familyTable.indexOf('Actions') > familyTable.indexOf('fable'));
+assert(familyTable.indexOf('Actions') < familyTable.indexOf('Bind Claude subscription models'));
 await enter();
 await see('Route opus via', 'route-provider-family');
+await reactAct(async () => setup.resize(60, 22));
+await arrow('up'); // Wrap to the final provider action.
+const providerEnd = await waitForFrame(f => f.includes('Clear route'));
+assert(providerEnd.includes('Enter choose') && providerEnd.includes('q quit'), 'provider picker footer must fit below the last action');
+await arrow('down');
+await reactAct(async () => setup.resize(100, 40));
 gateModels();
 await enter();
 await see('Fetching models', 'route-model-loading');
 releaseModels();
 await see('stub-model-a', 'route-model-pick');
+await arrow('down');
+await enter();
+await see('Apply this route?', 'route-confirm');
+assert.equal(store.home.readConfig().routing?.families.opus?.model, 'minimax-m3');
+await esc();
+await see('stub-model-a', 'route-revise');
+await enter();
+await waitForFrame(f => f.includes('Apply this route?'));
+await enter();
+await see('Bind Claude subscription models', 'route-applied');
+assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
+stubModels.push(...Array.from({ length: 24 }, (_, i) => ({ id: `stub-model-extra-${i}` })));
+stubModels.unshift({ id: 'a-long-model-' + 'x'.repeat(60) });
+await enter();
+gateModels();
+await enter();
+await waitForFrame(f => f.includes('Fetching models'));
+releaseModels();
+await waitForFrame(f => f.includes('stub-model-a'));
+
+for (const [width, height] of [[80, 24], [100, 28], [60, 24]]) {
+  await reactAct(async () => setup.resize(width, height));
+  const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('stub-model-extra-0'));
+  assert(frame.includes('Enter choose') && frame.includes('q quit'), `route-model footer must fit at ${width}×${height}`);
+  if (width === 60) assert(frame.split('\n').some(line => line.trim().startsWith('│ xxx')), 'the proposed model must wrap');
+}
+await reactAct(async () => setup.resize(100, 40));
 await esc();
 await enter();
 await see('Route opus via', 'route-provider-family-again');
@@ -237,6 +351,10 @@ await arrow('down');
 await arrow('down');
 await enter();
 await see('Add alias', 'routing-aliases');
+assert(setup.captureCharFrame().split('\n').some(line => line.includes('fast') && line.includes('opencode-go / minimax-m3')));
+await reactAct(async () => setup.resize(39, 24));
+await waitForFrame(f => f.includes('↳ opencode-go / minimax-m3') && f.includes('Add alias'));
+await reactAct(async () => setup.resize(100, 40));
 await enter();
 await see('Rename alias', 'route-provider-alias');
 await enter();
@@ -258,6 +376,53 @@ await esc();
 // /bridge last — the header badge stays up once the listener binds
 await run('/bridge');
 await see('Access secret', 'bridge');
+assert(!setup.captureCharFrame().includes('span-baseline-secret'), 'bridge secret starts masked');
+assert(!setup.captureCharFrame().includes('/plugin marketplace'), 'setup starts folded');
+await reactAct(async () => { await mockInput.typeText('s'); });
+await see('/plugin marketplace', 'bridge-client-setup');
+const clientSetup = setup.captureCharFrame();
+const advisorKey = 'CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1';
+assert(clientSetup.includes('Launch Claude Code') && !clientSetup.includes(advisorKey), 'manual setup starts folded');
+assert.equal(inkOf('Launch Claude Code'), '241,237,243');
+assert.equal(inkOf('claude-wisp [args…]'), '207,176,250');
+assert.equal(inkOf('Enabled automatically'), '176,171,182');
+assert.equal(inkOf('Bridge up'), '132,203,163');
+await reactAct(async () => { await mockInput.typeText('a'); });
+await see(advisorKey, 'bridge-manual-advisor');
+assert.equal(inkOf(advisorKey), '207,176,250');
+await reactAct(async () => { await mockInput.typeText('a'); });
+await waitForFrame(f => f.includes('Launch Claude Code') && !f.includes(advisorKey));
+assert(clientSetup.split('\n').filter(line => line.includes('claude-wisp [args…]')).every(line => !line.includes('Launch')));
+await reactAct(async () => { await mockInput.typeText('s'); });
+await waitForFrame(f => f.includes('Access secret'));
+await reactAct(async () => { await mockInput.typeText('r'); });
+await waitForFrame(f => f.includes('span-baseline-secret'));
+await esc();
+await waitForFrame(f => f.includes('Type / for commands') && f.includes('Bridge up'));
+assert.equal(inkOf('Bridge up'), '132,203,163', 'the running listener must be green on home');
+snap('home-bridge-running');
+await run('/routing');
+await see('Routing map', 'routing-bridge-running');
+assert.equal(inkOf('Bridge up'), '132,203,163', 'the running listener must also be green on routing');
+await esc();
+await run('/bridge off');
+await waitForFrame(f => f.includes('Bridge idle') && !f.includes('Bridge up'));
+
+// A wrapped alias is one selectable route; its destination starts on the first physical line.
+store.home.updateConfig(config => ({ ...config, routing: { ...config.routing!, aliases: [
+  { ...config.routing!.aliases[0], name: 'abcdefghijklmnopqrst' },
+] } }));
+await reactAct(async () => setup.resize(50, 24));
+await run('/routing');
+await waitForFrame(f => f.includes('Routing map'));
+await arrow('down');
+await arrow('down');
+await enter();
+const wrappedAlias = await waitForFrame(f => f.includes('Add alias'));
+const routeLines = wrappedAlias.split('\n');
+const aliasLine = routeLines.findIndex(line => line.includes('abcdefghijklmno'));
+assert(aliasLine >= 0 && routeLines[aliasLine].includes('opencode-go'), 'align destination with the first alias line');
+assert(routeLines[aliasLine + 1].includes('pqrst'), 'keep the rest of the alias on its own physical line');
 
 // ----------------------------------------- Baseline write / diff ----------------------------------------- //
 

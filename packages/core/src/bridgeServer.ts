@@ -1348,5 +1348,9 @@ export const createBridgeServer = (deps: BridgeDeps) => {
   const stop = (): void => { for (const call of voiceCalls) call.abort(); voiceCalls.clear(); for (const socket of voiceSockets) socket.destroy(); voiceSockets.clear(); if (server) { server.close(); server = undefined; deps.sessionLog?.lifecycle('stop'); deps.log('[bridge] stopped'); } };
 
   // dispose === stop, so the handle drops straight onto context.subscriptions and closes on deactivate.
-  return { start, stop, isRunning: () => !!server, dispose: stop };
+  const listeningPort = () => {
+    const address = server?.address();
+    return address && typeof address === 'object' ? address.port : undefined;
+  };
+  return { start, stop, isRunning: () => !!server, listeningPort, dispose: stop };
 };

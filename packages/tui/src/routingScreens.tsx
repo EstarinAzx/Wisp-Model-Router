@@ -5,7 +5,7 @@
  *   - @wisp/core: PROVIDERS + FAMILY_KEYS + the pure routing-map read/edit helpers.
  *   - ./store: the shared ~/.wisp handle — the routing map lives in config.
  *   - ./modes: RouteRow — which map row a picker chain is editing.
- *   - ./theme: PANEL/DIM/SELECT_COLORS — the shared look.
+ *   - ./theme: input and text colors — the shared look.
  *   - ./widgets: wrapWords + WrapSelect + onSubmitText — the wrapped-select Screens.
  *
  * Data shapes:
@@ -23,22 +23,21 @@ import {
   PROVIDERS, FAMILY_KEYS, EMPTY_ROUTING_MAP, withAliasRenamed,
   type Provider, type RoutingMap, type FamilyKey, type Target,
 } from '@wisp/core';
+import { useTerminalDimensions } from '@opentui/react';
+import { ArtRows, flightWidth } from './flight';
+import { routeArt } from './flightArt';
 import { home } from './store';
 import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
-import { PANEL, DIM, SELECT_COLORS } from './theme';
-import { wrapWords, WrapSelect, onSubmitText, SELECT_MOUSE } from './widgets';
+import { commandFrameFits, useTuiInk } from './theme';
+import { ChoiceList, Panel, wrapWords, WrapSelect, type WrapOption, onSubmitText, useInputColors } from './widgets';
 
 // ----------------------------------------- Row helpers ----------------------------------------- //
 
 export const routingMap = (): RoutingMap => home.readConfig().routing ?? EMPTY_ROUTING_MAP;
 
 export const rowLabel = (row: RouteRow): string => (row.kind === 'family' ? row.family : row.name);
-
-// Border-title-safe label: opentui silently drops a whole title over one non-ASCII char, and alias
-// names are free text (the panel accepts anything) — replace the offenders, never lose the title.
-const titleLabel = (row: RouteRow): string => rowLabel(row).replace(/[^\x20-\x7e]/g, '?');
 
 const rowTarget = (map: RoutingMap, row: RouteRow): Target | undefined =>
   row.kind === 'family' ? map.families[row.family] : row.kind === 'codex-model'
@@ -65,26 +64,35 @@ export const CLAUDE_FAMILY_MODELS: Record<FamilyKey, string> = {
 // ----------------------------------------- Screens ----------------------------------------- //
 
 // The /routing overview — two sections: Claude Code's Family routes, and the named Aliases.
+const traces = [routeArt(0), routeArt(1), routeArt(2)];
 export const RoutingScreen = ({ cols, onPick }: {
   cols: number;
   onPick: (section: RoutingSection) => void;
-}) => (
-  <box {...PANEL} title="Routing map" marginTop={1} flexDirection="column">
-    {/* hand-wrapped into per-line rows — opentui's own wrap garbles everything below it */}
-    {wrapWords("Points incoming model names at your Providers — Claude families, exact Codex models, and your own Aliases.", cols)
-      .map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={DIM}>{l}</text>)}
-    <WrapSelect
-      cols={cols}
-      maxRows={12}
-      options={[
-        { name: 'Claude Code', description: `the Family routes (${FAMILY_KEYS.join(' / ')})`, value: 'families' },
-        { name: 'Codex', description: 'route each native model independently', value: 'codex' },
-        { name: 'Custom', description: `your named Aliases (${routingMap().aliases.length}) + add`, value: 'aliases' },
-      ]}
-      onSelect={(_i, opt) => onPick(opt.value as RoutingSection)}
-    />
-  </box>
-);
+}) => {
+  const [selected, setSelected] = useState(0);
+  const { height } = useTerminalDimensions();
+  const illustrated = cols >= 62 && height >= 24;
+  const sections: { name: string; description: string; value: RoutingSection }[] = [
+    { name: 'Claude Code', description: FAMILY_KEYS.join(' / '), value: 'families' },
+    { name: 'Codex', description: 'Exact model routes', value: 'codex' },
+    { name: 'Custom', description: `Aliases · ${routingMap().aliases.length}`, value: 'aliases' },
+  ];
+  return <Panel title="Routing map">
+    <box flexDirection="row" alignItems="center">
+      {illustrated && <box width={21} marginRight={2}><ArtRows rows={traces[selected]} /></box>}
+      <box flexGrow={1}>
+        <ChoiceList height={6} options={sections} selectedIndex={selected}
+          onChange={setSelected} onSelect={index => onPick(sections[index].value)} />
+      </box>
+    </box>
+  </Panel>;
+};
+
+// The TUI ships on Bun. Count terminal cells so wide alias names keep their columns.
+declare const Bun: {
+  stringWidth(text: string): number;
+  wrapAnsi(text: string, columns: number, options: { hard: boolean }): string;
+};
 
 // One section's rows — Family routes with the one-tap bind, or Aliases with add.
 export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPickRow }: {
@@ -94,6 +102,7 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
   onBind: () => void;
   onPickRow: (row: RouteRow) => void;
 }) => {
+  const ink = useTuiInk();
   const [catalog, setCatalog] = useState<CodexRoutingCatalog>({ models: [], error: 'Discovering native Codex models…' });
   useEffect(() => {
     if (section !== 'codex') return;
@@ -101,28 +110,41 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
     void loadCodexRoutingCatalog().then(result => { if (active) setCatalog(result); });
     return () => { active = false; };
   }, [section]);
-  return <box {...PANEL} title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'} marginTop={1} flexDirection="column">
-    {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={DIM}>{line}</text>)}
-    {/* value encodes the row as kind:key — split at the FIRST colon, alias names may contain more */}
-    {/* keyed by section so toggling families ↔ aliases can't reuse a stale selection */}
-    <WrapSelect
-      key={section}
-      cols={cols}
-      maxRows={14}
-      options={section === 'families'
-        ? [
-            ...FAMILY_KEYS.map((f) => {
-              const t = routingMap().families[f];
-              return { name: f, description: t ? `${t.providerId} (${t.model})` : 'not routed — Active Provider answers', value: `family:${f}` };
-            }),
-            // ' bind' rides the same leading-space convention as ' clear'/' rename' — it can
-            // never collide with a family:/alias: row key.
-            { name: 'Bind Claude subscription models', description: 'route all four families to Anthropic (Claude.ai) in one go', value: ' bind' },
-          ]
-        : section === 'codex' ? codexRoutingRows(routingMap(), catalog).map(row => ({ name: row.name, description: `${row.id} — ${row.description}`, value: `codex-model:${row.id}` })) : [
-            ...routingMap().aliases.map((a) => ({ name: a.name, description: `alias — ${a.target.providerId} (${a.target.model})`, value: `alias:${a.name}` })),
-            { name: 'Add alias', description: 'name a new bridged model', value: 'add' },
-          ]}
+  const map = routingMap();
+  const sourceLabel = section === 'families' ? 'Family' : section === 'codex' ? 'Codex model' : 'Alias';
+  const wide = cols >= 46;
+  const sourceWidth = section === 'families' ? 10 : Math.min(22, Math.floor(cols / 3));
+  const destWidth = Math.max(1, cols - sourceWidth - 5);
+  const option = (name: string, target: string, value: string): WrapOption => {
+    const wrap = (text: string, width: number): string[] => Bun.wrapAnsi(text, Math.max(1, width), { hard: true }).split('\n');
+    const source = wrap(name, wide ? sourceWidth : cols - 2);
+    const dest = wrap(target, wide ? destWidth : cols - 4);
+    const lines = wide ? Array.from({ length: Math.max(source.length, dest.length) }, (_, i) => {
+      const label = source[i] ?? '';
+      return { source: label + ' '.repeat(Math.max(0, sourceWidth - Bun.stringWidth(label))),
+        connector: i === 0 ? ' → ' : '   ', destination: dest[i] };
+    }) : [...source.map(source => ({ source })), ...dest.map((destination, i) => ({ connector: i === 0 ? '↳ ' : '  ', destination }))];
+    return { name, description: target, value, lines };
+  };
+  const routes = section === 'families'
+    ? FAMILY_KEYS.map(f => {
+        const target = map.families[f];
+        return option(f, target ? destination(target) : 'Active Provider (default)', 'family:' + f);
+      })
+    : section === 'aliases'
+      ? map.aliases.map(alias => option(alias.name, destination(alias.target), 'alias:' + alias.name))
+      : codexRoutingRows(map, catalog).map(row => option(row.name === row.id ? row.id : row.name + ' · ' + row.id,
+          row.description, 'codex-model:' + row.id));
+  if (section === 'families') routes.push({ group: 'Actions', name: 'Bind Claude subscription models',
+    description: '  Route all four families to Anthropic (Claude.ai).', value: ' bind' });
+  if (section === 'aliases') routes.push({ group: 'Actions', name: 'Add alias', description: '', value: 'add' });
+  return <Panel title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'}>
+    {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={ink.note}>{line}</text>)}
+    <text fg={ink.heading} wrapMode="none" height={1}><strong>{wide
+      ? '  ' + sourceLabel.padEnd(sourceWidth) + '   Destination'
+      : '  ' + sourceLabel + ' → Destination'}</strong></text>
+    {section === 'aliases' && !map.aliases.length && <text fg={ink.note}>  No aliases yet.</text>}
+    <WrapSelect key={section} cols={cols} maxRows={14} options={routes}
       onSelect={(_i, opt) => {
         const v = opt.value;
         if (v === 'add') { onAddAlias(); return; }
@@ -131,7 +153,7 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
         onPickRow(v.startsWith('family:') ? { kind: 'family', family: key as FamilyKey } : { kind: v.startsWith('codex-model:') ? 'codex-model' : 'alias', name: key });
       }}
     />
-  </box>;
+  </Panel>;
 };
 
 // Name a new alias — precheck the Provider-id shadow rule while the name is still editable.
@@ -140,8 +162,8 @@ export const AliasNameScreen = ({ onBack, onStatus, onNamed }: {
   onStatus: (message: string) => void;
   onNamed: (name: string) => void;
 }) => (
-  <box {...PANEL} title="New alias name" marginTop={1}>
-    <input
+  <Panel title="New alias name">
+    <input {...useInputColors()}
       focused
       placeholder="a bridged model name, e.g. fast"
       onSubmit={onSubmitText((value) => {
@@ -153,7 +175,7 @@ export const AliasNameScreen = ({ onBack, onStatus, onNamed }: {
         onNamed(name);
       })}
     />
-  </box>
+  </Panel>
 );
 
 // Rename an existing alias in place — Target kept, only the bridged name changes.
@@ -162,8 +184,8 @@ export const AliasRenameScreen = ({ name, onBack, onStatus }: {
   onBack: (message: string) => void;
   onStatus: (message: string) => void;
 }) => (
-  <box {...PANEL} title={`Rename alias ${titleLabel({ kind: 'alias', name })}`} marginTop={1}>
-    <input
+  <Panel title={`Rename alias ${name}`}>
+    <input {...useInputColors()}
       focused
       placeholder={name}
       onSubmit={onSubmitText((value) => {
@@ -183,7 +205,7 @@ export const AliasRenameScreen = ({ name, onBack, onStatus }: {
         onBack(`Alias ${name} → ${next}.`);
       })}
     />
-  </box>
+  </Panel>
 );
 
 // Pick a row's Provider — alias rows lead with the rename/remove verbs.
@@ -193,11 +215,13 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
   onClear: () => void;
   onRename: (name: string) => void;
   onPick: (p: Provider) => void;
-}) => (
-  <box {...PANEL} title={`Route ${titleLabel(row)} via...`} marginTop={1} flexDirection="column">
+}) => {
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row));
+  return <Panel title={`Route ${rowLabel(row)} via...`}>
+    {trace.view}
     <WrapSelect
       cols={cols}
-      maxRows={14}
+      maxRows={Math.min(12, trace.pickerRows - 2)} // WrapSelect can show a “more” row at each end.
       options={[
         // Alias rows lead with the edit verbs (#79) — no scrolling past every Provider to
         // rename. Only for aliases already IN the map: the add-alias flow passes through here
@@ -222,60 +246,120 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
         if (p) onPick(p);
       }}
     />
-  </box>
-);
+  </Panel>;
+};
 
 // The route-model fetch's parking line — the shell starter resolves it to pick or free entry.
 export const RouteModelLoadingScreen = ({ provider }: { provider: Provider }) => (
-  <text wrapMode="none" flexShrink={0} fg={DIM} marginTop={1}>Fetching models for {provider.label}…</text>
+  <text wrapMode="none" flexShrink={0} fg={useTuiInk().note} marginTop={1}>Fetching models for {provider.label}…</text>
 );
 
+const destination = (target?: Target) => target ? `${target.providerId} / ${target.model}` : 'No explicit route';
+
+const useRouteTrace = (row: RouteRow, assigned?: Target, proposed?: Target) => {
+  const ink = useTuiInk();
+  const { width, height } = useTerminalDimensions();
+  const panelWidth = Math.min(flightWidth(width), 76);
+  const wide = panelWidth >= 72 && height >= 28;
+  const source = rowLabel(row);
+  const sourceCols = Math.min(18, Math.max(9, source.length + 2));
+  const cols = Math.max(1, panelWidth - (wide ? sourceCols + 21 : 0));
+  const changed = proposed && (proposed.model !== assigned?.model || proposed.providerId !== assigned?.providerId);
+  const label = (name: string, target?: Target) => {
+    const destInk = target ? ink.value : ink.note;
+    if (cols < name.length + 3) return [
+      ...wrapWords(name, cols).map((line, i) => <text key={`label-${i}`} fg={ink.heading} height={1}>{line}</text>),
+      ...wrapWords(destination(target), cols).map((line, i) => <text key={i} fg={destInk} height={1}>{line}</text>),
+    ];
+    return wrapWords(name + '   ' + destination(target), cols).map((line, i) =>
+      <text key={i} fg={destInk} height={1} wrapMode="none">
+        {i === 0 ? <><span fg={ink.heading}>{name}</span>{line.slice(name.length)}</> : line}
+      </text>);
+  };
+  const sourceLines = wrapWords(source, wide ? sourceCols : cols);
+  const assignedLines = label('Assigned', assigned);
+  const proposedLines = proposed ? label('Proposed', proposed) : [];
+  const targetRows = assignedLines.length + proposedLines.length;
+  const rows = wide ? Math.max(8, sourceLines.length, targetRows + 2) : sourceLines.length + targetRows;
+  const view = <box flexDirection={wide ? 'row' : 'column'}>
+    <box width={wide ? sourceCols : '100%'} justifyContent="center">
+      {sourceLines.map((part, i) => <text key={i} fg={ink.heading}><strong>{part}</strong></text>)}
+    </box>
+    {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 2 : 0]} /></box>}
+    <box flexGrow={1} justifyContent={wide ? 'space-between' : 'flex-start'} paddingY={wide ? 1 : 0}>
+      <box>{assignedLines}</box>
+      {proposed && <box>{proposedLines}</box>}
+    </box>
+  </box>;
+  const chromeRows = commandFrameFits(width, height) ? 10 : 7;
+  return { view, pickerRows: height - chromeRows - rows };
+};
+
+export const RouteConfirmScreen = ({ row, target }: { row: RouteRow; target: Target }) => {
+  const ink = useTuiInk();
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row), target);
+  return <Panel title="Apply this route?">
+    {trace.view}
+    <text fg={ink.note} marginTop={1}><span fg={ink.value}>Enter</span> apply   <span fg={ink.value}>Esc</span> revise</text>
+  </Panel>;
+};
+
 // Pick the row's pinned model from the Provider's curated/live list.
-export const RouteModelPickScreen = ({ row, provider, options, onApply, onManual, onRefresh }: {
+export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, onManual, onRefresh }: {
   row: RouteRow;
   provider: Provider;
   options: string[];
+  draft?: string;
   onManual: () => void;
   onRefresh: () => void;
   onApply: (target: Target) => void;
-}) => (
-  <box {...PANEL} title={`Model for ${titleLabel(row)} - ${provider.label}`} marginTop={1} flexDirection="column">
-    {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
-    <select
-      focused
-      {...SELECT_COLORS}
-      {...SELECT_MOUSE}
-      height={Math.min(options.length + 2, 14)}
-      showDescription={false}
-      showSelectionIndicator={false}
-      showScrollIndicator
-      options={[...options.map((id) => {
-        const t = rowTarget(routingMap(), row);
-        return {
-          name: t?.providerId === provider.id && t.model === id ? `${id} (current)` : id,
-          description: '',
-          value: id,
-        };
-      }), { name: 'Enter a model id…', description: '', value: ' manual' }, { name: 'Refresh models', description: '', value: ' refresh' }]}
-      onSelect={(_i, opt) => {
-        if (opt?.value === ' manual') { onManual(); return; }
-        if (opt?.value === ' refresh') { onRefresh(); return; }
-        if (opt) onApply({ providerId: provider.id, model: String(opt.value) });
-      }}
-    />
-  </box>
-);
+}) => {
+  const [index, setIndex] = useState(Math.max(0, options.indexOf(draft ?? '')));
+  const assigned = rowTarget(routingMap(), row);
+  const model = options[index];
+  const trace = useRouteTrace(row, assigned, model ? { providerId: provider.id, model } : undefined);
+  return (
+    <Panel title={`Model for ${rowLabel(row)} - ${provider.label}`}>
+      {trace.view}
+      {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
+      <ChoiceList
+        height={Math.max(1, Math.min(options.length + 2, 14, trace.pickerRows))}
+        selectedIndex={index}
+        onChange={(next) => setIndex(next)}
+        showDescription={false}
+        options={[...options.map((id) => ({
+            name: assigned?.providerId === provider.id && assigned.model === id ? `${id} (current)` : id,
+            description: '',
+            value: id,
+        })), { name: 'Enter a model id…', description: '', value: ' manual' }, { name: 'Refresh models', description: '', value: ' refresh' }]}
+        onSelect={(_i, opt) => {
+          if (opt?.value === ' manual') { onManual(); return; }
+          if (opt?.value === ' refresh') { onRefresh(); return; }
+          if (opt) onApply({ providerId: provider.id, model: String(opt.value) });
+        }}
+      />
+    </Panel>
+  );
+};
 
 // No live list — free-typed model id for the row; empty keeps the old route.
-export const RouteModelFreeScreen = ({ row, provider, onApply, onEmpty }: {
+export const RouteModelFreeScreen = ({ row, provider, draft, onApply, onEmpty }: {
   row: RouteRow;
   provider: Provider;
   onApply: (target: Target) => void;
+  draft?: string;
   onEmpty: () => void;
-}) => (
-  <box {...PANEL} title={`Model for ${titleLabel(row)} - ${provider.label} (no live list - type an id)`} marginTop={1}>
-    <input
+}) => {
+  const { width } = useTerminalDimensions();
+  const cols = Math.min(flightWidth(width), 76);
+  const title = [
+    `Model for ${rowLabel(row)} - ${provider.label} (no live list - type an id)`,
+    `${rowLabel(row)} → ${provider.label} · type an id`,
+  ].find(label => Bun.stringWidth(label) <= cols) ?? 'Model ID';
+  return <Panel title={title}>
+    <input {...useInputColors()}
       focused
+      value={draft}
       placeholder={provider.defaultModel || 'model id'}
       onSubmit={onSubmitText((value) => {
         const id = value.trim();
@@ -283,5 +367,5 @@ export const RouteModelFreeScreen = ({ row, provider, onApply, onEmpty }: {
         else onEmpty();
       })}
     />
-  </box>
-);
+  </Panel>;
+};

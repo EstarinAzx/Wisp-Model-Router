@@ -5,7 +5,7 @@
  *   - @wisp/core: base-url/key resolvers, the three OAuth stream clients, and the SSE helpers
  *     the keyed-Provider path parses with.
  *   - ./store: the shared ~/.wisp handle + OAuth managers — each stream kind's credentials.
- *   - ./theme: PANEL/DIM — the shared look.
+ *   - ./theme: shared text colors for the reply and status.
  *
  * Data shapes:
  *   - TestScreen is a pure function of the 'test' Mode payload fields — the shell keeps the
@@ -22,7 +22,8 @@ import {
   chatCompletionTextDelta, type Provider,
 } from '@wisp/core';
 import { home, codexAuth, anthropicAuth, xaiAuth, antigravityAuth, bearerFor } from './store';
-import { PANEL, DIM } from './theme';
+import { useTuiInk } from './theme';
+import { Panel } from './widgets';
 
 // ----------------------------------------- Wiring check ----------------------------------------- //
 
@@ -99,13 +100,15 @@ export const TestScreen = ({ provider, model, text, phase, error }: {
   text: string;
   phase: 'streaming' | 'done' | 'error';
   error?: string;
-}) => (
-  // plain-ASCII title on purpose — opentui border titles drop non-ASCII (em-dash/·), see gotchas
-  <box {...PANEL} title={`/test: ${provider.label} (${model})`} marginTop={1} flexDirection="column">
+}) => {
+  const ink = useTuiInk();
+  return <Panel title={`/test: ${provider.label} (${model})`}>
     {/* raw reply text, streamed as-is — deliberately no markdown, no history (#62) */}
-    {text !== '' && <text>{text}</text>}
-    {phase === 'streaming' && <text wrapMode="none" fg={DIM}>{text === '' ? 'Waiting for the first token… ' : ''}Esc to cancel.</text>}
-    {phase === 'done' && <text wrapMode="none" fg={DIM}>Done — Esc to close.</text>}
-    {phase === 'error' && <text fg="#f87171">{error}</text>}
-  </box>
-);
+    {text !== '' && <text fg={ink.value}>{text}</text>}
+    {phase === 'streaming' && <text wrapMode="none" fg={ink.note}>
+      {text === '' && <span fg={ink.live}>Waiting for the first token… </span>}Esc to cancel.
+    </text>}
+    {phase === 'done' && <text wrapMode="none" fg={ink.note}><span fg={ink.live}>Done</span> — Esc to close.</text>}
+    {phase === 'error' && <text fg={ink.heading}>{error}</text>}
+  </Panel>;
+};

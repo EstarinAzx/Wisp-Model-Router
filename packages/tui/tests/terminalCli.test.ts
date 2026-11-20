@@ -291,6 +291,11 @@ test('TUI Codex saved rows remain editable and clear/Esc return to Codex', () =>
       await act(async () => { await new Promise(r => setTimeout(r, 30)); }); await ui.renderOnce();
       assert(ui.captureCharFrame().includes('type an id'), ui.captureCharFrame());
       await act(async () => ui.mockInput.typeText('edited-model')); await keys('RETURN');
+      assert(ui.captureCharFrame().includes('Apply this route?'), ui.captureCharFrame());
+      assert.equal(JSON.parse(readFileSync(join(process.env.WISP_HOME, 'config.json'), 'utf8')).routing.codexModels['saved:missing'].model, 'saved');
+      await keys('ESCAPE');
+      assert(ui.captureCharFrame().includes('edited-model'), ui.captureCharFrame());
+      await keys('RETURN', 'RETURN');
       assert(ui.captureCharFrame().includes('saved:missing'), ui.captureCharFrame());
       assert.equal(JSON.parse(readFileSync(join(process.env.WISP_HOME, 'config.json'), 'utf8')).routing.codexModels['saved:missing'].model, 'edited-model');
       await keys('RETURN');

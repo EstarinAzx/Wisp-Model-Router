@@ -12,7 +12,7 @@
  * circular import on the shell.
  */
 
-import type { Provider, FamilyKey } from '@wisp/core';
+import type { Provider, FamilyKey, Target } from '@wisp/core';
 
 // ----------------------------------------- Route rows ----------------------------------------- //
 
@@ -21,6 +21,10 @@ export type RouteRow = { kind: 'family'; family: FamilyKey } | { kind: 'alias'; 
 export type RoutingSection = 'families' | 'codex' | 'aliases';
 
 // ----------------------------------------- Mode union ----------------------------------------- //
+
+export type RouteEditor =
+  | { kind: 'route-model-pick'; row: RouteRow; provider: Provider; options: string[]; draft?: string }
+  | { kind: 'route-model-free'; row: RouteRow; provider: Provider; draft?: string };
 
 export type Mode =
   | { kind: 'input' }
@@ -56,8 +60,8 @@ export type Mode =
   | { kind: 'alias-rename'; name: string }
   | { kind: 'route-provider'; row: RouteRow }
   | { kind: 'route-model-loading'; row: RouteRow; provider: Provider }
-  | { kind: 'route-model-pick'; row: RouteRow; provider: Provider; options: string[] }
-  | { kind: 'route-model-free'; row: RouteRow; provider: Provider };
+  | RouteEditor
+  | { kind: 'route-confirm'; editor: RouteEditor; target: Target };
 
 export const logBackMode = (mode: Extract<Mode, { kind: 'log' | 'logs' }>): Mode =>
   mode.kind === 'log' ? { kind: 'logs' } : { kind: 'input' };

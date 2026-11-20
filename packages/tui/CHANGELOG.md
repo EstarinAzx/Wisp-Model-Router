@@ -6,6 +6,18 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Changes up to 2.0.10 are folded into the product changelog at
 `packages/vscode/CHANGELOG.md`.
 
+## [2.3.0] - 2026-11-20
+
+### Changed
+
+- Flight adds a responsive terminal home and command views with light and dark text colors. Pickers keep the selected item visible as the window shrinks.
+- Route editing groups destinations and actions and lets you confirm or revise a target before saving. Long aliases line up with their destinations in narrow windows.
+- Home and command headers show the active Bridge port, including a separately hosted Wisp on the configured loopback port. Quitting the terminal leaves that host running.
+
+### Surfaces
+
+- **Terminal/npm 2.3.0** ships Flight. **Companion VSIX 1.14.13** bundles the shared Bridge update. The slot plugin stays at **1.7.6** and the Desktop protocol at **5**. [Release notes](../../docs/releases/v2.3.0.md)
+
 ## [2.2.15] - 2026-11-18
 
 ### Fixed

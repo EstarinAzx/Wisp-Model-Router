@@ -4,6 +4,16 @@ All notable changes to **Wisp** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.13] - 2026-11-20
+
+### Changed
+
+- Bundles the shared Bridge update that exposes its listening port to its host.
+
+### Surfaces
+
+- **Companion VSIX 1.14.13** ships with **terminal/npm 2.3.0**, where the Flight screens and live Bridge indicator appear. The slot plugin stays at **1.7.6** and the Desktop protocol at **5**. [Release notes](../../docs/releases/v2.3.0.md)
+
 ## [1.14.12] - 2026-11-18
 
 ### Fixed
