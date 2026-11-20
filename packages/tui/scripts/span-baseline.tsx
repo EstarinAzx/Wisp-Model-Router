@@ -58,6 +58,7 @@ writeFileSync(join(sandbox, 'auth.json'), JSON.stringify({
 
 // holdModels lets a scenario freeze the *-loading Screens open, then release into the pick Screen.
 let holdModels: Promise<void> | null = null;
+const stubModels = [{ id: 'stub-model-a' }, { id: 'stub-model-b' }];
 let releaseModels: () => void = () => {};
 const gateModels = () => { holdModels = new Promise((r) => { releaseModels = () => { holdModels = null; r(); }; }); };
 
@@ -67,7 +68,7 @@ globalThis.fetch = (async (input: unknown) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.endsWith('/models')) {
     if (holdModels) await holdModels;
-    return Response.json({ data: [{ id: 'stub-model-a' }, { id: 'stub-model-b' }] });
+    return Response.json({ data: stubModels });
   }
   if (url.endsWith('/chat/completions')) {
     return new Response(
@@ -307,6 +308,7 @@ await waitForFrame(f => f.includes('Apply this route?'));
 await enter();
 await see('Bind Claude subscription models', 'route-applied');
 assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
+stubModels.push(...Array.from({ length: 24 }, (_, i) => ({ id: `stub-model-extra-${i}` })));
 await enter();
 gateModels();
 await enter();
@@ -314,6 +316,12 @@ await waitForFrame(f => f.includes('Fetching models'));
 releaseModels();
 await waitForFrame(f => f.includes('stub-model-a'));
 
+for (const [width, height] of [[80, 24], [100, 28]]) {
+  await reactAct(async () => setup.resize(width, height));
+  const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('stub-model-extra-0'));
+  assert(frame.includes('Enter choose') && frame.includes('q quit'), `route-model footer must fit at ${width}×${height}`);
+}
+await reactAct(async () => setup.resize(100, 40));
 await esc();
 await enter();
 await see('Route opus via', 'route-provider-family-again');

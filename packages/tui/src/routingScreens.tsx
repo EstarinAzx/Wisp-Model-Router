@@ -30,7 +30,7 @@ import { home } from './store';
 import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
-import { useTuiInk } from './theme';
+import { commandFrameFits, useTuiInk } from './theme';
 import { ChoiceList, Panel, wrapWords, WrapSelect, type WrapOption, onSubmitText, useInputColors } from './widgets';
 
 // ----------------------------------------- Row helpers ----------------------------------------- //
@@ -255,11 +255,13 @@ export const RouteModelLoadingScreen = ({ provider }: { provider: Provider }) =>
 
 const destination = (target?: Target) => target ? `${target.providerId} / ${target.model}` : 'No explicit route';
 
+const wideRouteTrace = (width: number, height: number) => flightWidth(width) >= 72 && height >= 28;
+
 const RouteTrace = ({ row, assigned, proposed }: { row: RouteRow; assigned?: Target; proposed?: Target }) => {
   const ink = useTuiInk();
   const { width, height } = useTerminalDimensions();
   const panelWidth = Math.min(flightWidth(width), 76);
-  const wide = panelWidth >= 72 && height >= 28;
+  const wide = wideRouteTrace(width, height);
   const source = rowLabel(row);
   const sourceCols = Math.min(18, Math.max(9, source.length + 2));
   const cols = Math.max(1, panelWidth - (wide ? sourceCols + 21 : 0));
@@ -306,7 +308,9 @@ export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, o
   onApply: (target: Target) => void;
 }) => {
   const [index, setIndex] = useState(Math.max(0, options.indexOf(draft ?? '')));
-  const { height } = useTerminalDimensions();
+  const { width, height } = useTerminalDimensions();
+  const traceRows = wideRouteTrace(width, height) ? 8 : 3;
+  const chromeRows = commandFrameFits(width, height) ? 10 : 7;
   const assigned = rowTarget(routingMap(), row);
   const model = options[index];
   return (
@@ -314,7 +318,7 @@ export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, o
       <RouteTrace row={row} assigned={assigned} proposed={model ? { providerId: provider.id, model } : undefined} />
       {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
       <ChoiceList
-        height={Math.max(1, Math.min(options.length + 2, 14, height - (height >= 28 ? 13 : 8)))}
+        height={Math.max(1, Math.min(options.length + 2, 14, height - chromeRows - traceRows))}
         selectedIndex={index}
         onChange={(next) => setIndex(next)}
         showDescription={false}
