@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { SLASH_COMMANDS, listLogSessions, readSessionLog, formatSessionLog } from '@wisp/core';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
-import { FOREGROUND } from './theme';
+import { ACCENT, FOREGROUND } from './theme';
 import { ChoiceList, Panel, wrapWords } from './widgets';
 import { sessionLabel, sessionDetail } from './bridgeLog';
 
@@ -42,14 +42,16 @@ export const BridgeScreen = ({ address, secret, cols }: { address: string; secre
     'Advisor      claude-wisp enables /advisor automatically. For manual setup, set CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1.',
     'Stop         /bridge off',
   ] : [
-    'OpenAI         ' + address + '/v1',
-    'Anthropic      ' + address,
-    'Access secret  ' + (revealed ? secret : '••••••'),
+    '├─ OpenAI       ' + address + '/v1',
+    '└─ Anthropic    ' + address,
+    '',
+    'Access secret   ' + (revealed ? secret : '••••••'),
   ];
   const rows = lines.flatMap(line => line.length < cols ? [line] : wrapWords(line, Math.max(1, cols - 1)));
   return <Panel title={setup ? 'Bridge / Client setup' : 'Bridge'}>
     <scrollbox focused scrollY height={Math.max(1, Math.min(rows.length, height - 8))}>
-      {rows.map((row, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>{row}</text>)}
+      {rows.map((row, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>{!setup && /^[├└]/.test(row)
+          ? <><span fg={ACCENT}>{row.slice(0, 2)}</span>{row.slice(2)}</> : row}</text>)}
     </scrollbox>
     <text fg={FOREGROUND} marginTop={1}>{setup ? 'S back · ↑↓ scroll · Esc close' : `R ${revealed ? 'hide' : 'reveal'} · S setup · Esc close`}</text>
   </Panel>;

@@ -64,23 +64,29 @@ export const CLAUDE_FAMILY_MODELS: Record<FamilyKey, string> = {
 // ----------------------------------------- Screens ----------------------------------------- //
 
 // The /routing overview — two sections: Claude Code's Family routes, and the named Aliases.
+const traces = [routeArt(0), routeArt(1), routeArt(2)];
 export const RoutingScreen = ({ cols, onPick }: {
   cols: number;
   onPick: (section: RoutingSection) => void;
-}) => (
-  <Panel title="Routing map">
-    <WrapSelect
-      cols={cols}
-      maxRows={12}
-      options={[
-        { name: 'Claude Code', description: FAMILY_KEYS.join(' / '), value: 'families' },
-        { name: 'Codex', description: 'Exact model routes', value: 'codex' },
-        { name: 'Custom', description: `Aliases · ${routingMap().aliases.length}`, value: 'aliases' },
-      ]}
-      onSelect={(_i, opt) => onPick(opt.value as RoutingSection)}
-    />
-  </Panel>
-);
+}) => {
+  const [selected, setSelected] = useState(0);
+  const { height } = useTerminalDimensions();
+  const illustrated = cols >= 62 && height >= 24;
+  const sections: { name: string; description: string; value: RoutingSection }[] = [
+    { name: 'Claude Code', description: FAMILY_KEYS.join(' / '), value: 'families' },
+    { name: 'Codex', description: 'Exact model routes', value: 'codex' },
+    { name: 'Custom', description: `Aliases · ${routingMap().aliases.length}`, value: 'aliases' },
+  ];
+  return <Panel title="Routing map">
+    <box flexDirection="row" alignItems="center">
+      {illustrated && <box width={21} marginRight={2}><ArtRows rows={traces[selected]} /></box>}
+      <box flexGrow={1}>
+        <ChoiceList height={6} options={sections} selectedIndex={selected}
+          onChange={setSelected} onSelect={index => onPick(sections[index].value)} />
+      </box>
+    </box>
+  </Panel>;
+};
 
 // One section's rows — Family routes with the one-tap bind, or Aliases with add.
 export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPickRow }: {
@@ -227,7 +233,6 @@ export const RouteModelLoadingScreen = ({ provider }: { provider: Provider }) =>
   <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>Fetching models for {provider.label}…</text>
 );
 
-const traces = [routeArt(0), routeArt(2)];
 const destination = (target?: Target) => target ? `${target.providerId} / ${target.model}` : 'No explicit route';
 
 const RouteTrace = ({ row, assigned, proposed }: { row: RouteRow; assigned?: Target; proposed?: Target }) => {
@@ -244,7 +249,7 @@ const RouteTrace = ({ row, assigned, proposed }: { row: RouteRow; assigned?: Tar
     <box width={wide ? sourceCols : '100%'} justifyContent="center">
       {wrapWords(source, wide ? sourceCols : cols).map((part, i) => <text key={i} fg={FOREGROUND}><strong>{part}</strong></text>)}
     </box>
-    {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 1 : 0]} /></box>}
+    {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 2 : 0]} /></box>}
     <box flexGrow={1} justifyContent={wide ? 'space-between' : 'flex-start'} paddingY={wide ? 1 : 0}>
       <box>{label('Assigned   ' + destination(assigned))}</box>
       {proposed && <box>{label('Proposed   ' + destination(proposed))}</box>}

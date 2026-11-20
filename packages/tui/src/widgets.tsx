@@ -17,12 +17,12 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useKeyboard, useTerminalDimensions, type SelectProps } from '@opentui/react';
 import type { MouseEvent, SelectRenderable, SelectOption } from '@opentui/core';
-import { ACCENT, FOREGROUND, SELECT_COLORS } from './theme';
+import { ACCENT, FOREGROUND, SELECT_COLORS, SELECTION, SELECTED_TEXT, commandFrameFits } from './theme';
 
 // A plain text heading also supports Unicode provider and alias names.
 export const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
   <box flexDirection="column" marginTop={1} flexShrink={0}>
-    <text fg={FOREGROUND} wrapMode="none" height={1}><span fg={ACCENT}>╶ </span><strong>{title}</strong></text>
+    <text fg={FOREGROUND} wrapMode="none" height={1}><strong>{title}</strong></text>
     <box marginTop={1}>{children}</box>
   </box>
 );
@@ -92,9 +92,9 @@ type ChoiceListProps = Pick<SelectProps, 'onChange' | 'onSelect' | 'selectedInde
 };
 export const ChoiceList = ({ options, height, selectedIndex, onChange, onSelect, showDescription }: ChoiceListProps) => {
   const [highlight, setHighlight] = useState(selectedIndex ?? 0);
-  const { height: terminalHeight } = useTerminalDimensions();
+  const { width, height: terminalHeight } = useTerminalDimensions();
   const active = Math.min(selectedIndex ?? highlight, options.length - 1);
-  const visibleRows = Math.max(1, Math.min(height, terminalHeight - 7));
+  const visibleRows = Math.max(1, Math.min(height, terminalHeight - (commandFrameFits(width, terminalHeight) ? 10 : 7)));
   return <select focused {...SELECT_COLORS} {...SELECT_MOUSE} showScrollIndicator
     height={visibleRows} showDescription={visibleRows >= 2 && (showDescription ?? true)}
     selectedIndex={Math.max(0, active)} showSelectionIndicator={false}
@@ -174,7 +174,7 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
         const i = top.current + k;
         const on = i === sel;
         return lines.map((l, j) => (
-          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} fg={FOREGROUND}>
+          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} bg={on && j === 0 ? SELECTION : undefined} fg={on && j === 0 ? SELECTED_TEXT : FOREGROUND}>
             <span fg={ACCENT}>{on && j === 0 ? '› ' : '  '}</span>{on && j === 0 ? <strong>{l}</strong> : l}
           </text>
         ));

@@ -113,7 +113,10 @@ const frames: Record<string, string[]> = {};
 const snap = (name: string) => {
   const frame = setup.captureSpans();
   for (const line of frame.lines) for (const span of line.spans) {
-    assert.equal(span.bg.toInts()[3], 0, `${name}: background must remain transparent`);
+    if (span.bg.toInts()[3] !== 0) {
+      assert.equal(span.bg.toInts().join(','), '62,45,82,255', name + ': only the selection may paint a background');
+      continue;
+    }
     if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', `${name}: ${span.text}`);
   }
   frames[name] = frameToLines(frame);
@@ -187,7 +190,11 @@ for (const [width, height] of [[80, 24], [110, 34], [52, 24], [42, 10], [176, 44
 // palette with the suggestion list open
 await reactAct(async () => { await mockInput.typeText('/'); });
 await see('/providers', 'input-suggestions');
+const selectionBand = () => setup.captureSpans().lines.filter(line => line.spans.some(span =>
+  span.bg.toInts().join(',') === '62,45,82,255')).map(line => line.spans.map(span => span.text).join('')).join('\n');
 const palette = setup.captureCharFrame();
+assert(palette.includes('╭') && palette.includes('╯'), 'the command palette has a visible frame');
+assert(selectionBand().includes('/providers'), 'the focused command has a selection bar');
 assert(!palette.includes('/signout'), 'only a short window of commands should appear');
 assert(!palette.includes('API-key Provider'), 'other commands should not show their help text');
 await reactAct(async () => { await mockInput.typeText('zz'); });
@@ -201,6 +208,8 @@ await press(() => mockInput.pressBackspace(), 'backspace');
 // /providers list + both menu payload kinds (keyed row with stored key, OAuth row signed in)
 await run('/providers');
 await see('(active)', 'providers');
+await reactAct(async () => setup.resize(80, 24));
+await waitForFrame(f => f.includes('OpenCode Go (active)') && f.includes('Esc back') && f.includes('╯'));
 await reactAct(async () => setup.resize(80, 8));
 const compactProviders = await waitForFrame(f => f.split('\n')[0].length === 80 && f.includes('Providers'));
 assert(compactProviders.includes('OpenCode Go (active)'), 'the selected provider must fit in a one-row picker');
@@ -265,6 +274,10 @@ await esc();
 // /routing chain: overview → families section → row picker → model loading/pick/free
 await run('/routing');
 await see('Routing map', 'routing');
+assert(selectionBand().includes('Claude Code'));
+await arrow('down');
+assert(selectionBand().includes('Codex'));
+await arrow('up');
 await enter();
 await see('Bind Claude subscription models', 'routing-families');
 await enter();

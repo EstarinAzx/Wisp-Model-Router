@@ -39,7 +39,7 @@ import { home, activeProvider, codexAuth, anthropicAuth, xaiAuth, kimiAuth, anti
 import { createTuiBridge, ensureBridgeSecret, bridgeAddress, bridgePort } from './bridge';
 import type { Mode, RouteRow, RoutingSection } from './modes';
 import { logBackMode } from './modes';
-import { ACCENT, FOREGROUND, RULE } from './theme';
+import { ACCENT, FOREGROUND, RULE, commandFrameFits } from './theme';
 import { Flight, flightWidth } from './flight';
 import { wrapWords } from './widgets';
 import {
@@ -122,6 +122,7 @@ export const App = () => {
   const renderer = useRenderer();
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
   const isHome = mode.kind === 'input' && line === '';
+  const framed = !isHome && commandFrameFits(termWidth, termHeight);
   const panelCols = Math.min(flightWidth(termWidth), isHome ? termWidth : 76);
   const isPicker = ['providers', 'provider-menu', 'key-pick', 'model-pick', 'oauth-pick', 'effort-pick',
     'routing', 'routing-section', 'route-provider', 'route-model-pick'].includes(mode.kind);
@@ -593,19 +594,21 @@ export const App = () => {
 
   return (
     <box width="100%" height="100%" alignItems="center" justifyContent="center">
-      <box width={panelCols} maxWidth="100%" maxHeight="100%">
+      <box width={panelCols + (framed ? 4 : 0)} maxWidth="100%" maxHeight="100%"
+        border={framed ? true : []} borderStyle="rounded" borderColor={RULE} paddingX={framed ? 1 : 0}>
       {isHome ? <box marginBottom={artHeight >= 30 ? 2 : 1}>
         <Flight width={panelCols} height={artHeight} />
       </box> : <box flexDirection="row" justifyContent="space-between" flexShrink={0}
-        marginBottom={termHeight >= 30 ? 2 : termHeight >= 24 ? 1 : 0}>
+        border={framed ? ['bottom'] : []} borderColor={RULE} marginBottom={0}>
         <text fg={FOREGROUND}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
-        <text fg={FOREGROUND}>{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
+        <text fg={FOREGROUND}>{bridge.isRunning() && <span fg={ACCENT}>● </span>}{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
       </box>}
       {mode.kind === 'input' && !isHome && <text fg={FOREGROUND} marginY={1}><strong>Commands</strong>{suggestions.length > 5 && <span>  {highlight + 1}/{suggestions.length}</span>}</text>}
 
       {mode.kind === 'input' && (
         <PaletteScreen
           inputRef={inputRef}
+          cols={panelCols}
           maxRows={Math.max(1, termHeight - 10 - feedback.length)}
           suggestions={suggestions}
           highlight={highlight}
