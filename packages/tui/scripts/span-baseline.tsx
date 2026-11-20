@@ -309,6 +309,7 @@ await enter();
 await see('Bind Claude subscription models', 'route-applied');
 assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
 stubModels.push(...Array.from({ length: 24 }, (_, i) => ({ id: `stub-model-extra-${i}` })));
+stubModels.unshift({ id: 'a-long-model-' + 'x'.repeat(60) });
 await enter();
 gateModels();
 await enter();
@@ -316,10 +317,11 @@ await waitForFrame(f => f.includes('Fetching models'));
 releaseModels();
 await waitForFrame(f => f.includes('stub-model-a'));
 
-for (const [width, height] of [[80, 24], [100, 28]]) {
+for (const [width, height] of [[80, 24], [100, 28], [60, 24]]) {
   await reactAct(async () => setup.resize(width, height));
   const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('stub-model-extra-0'));
   assert(frame.includes('Enter choose') && frame.includes('q quit'), `route-model footer must fit at ${width}×${height}`);
+  if (width === 60) assert(frame.split('\n').some(line => line.trim().startsWith('│ xxx')), 'the proposed model must wrap');
 }
 await reactAct(async () => setup.resize(100, 40));
 await esc();

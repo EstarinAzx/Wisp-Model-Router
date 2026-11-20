@@ -217,7 +217,7 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
   onPick: (p: Provider) => void;
 }) => (
   <Panel title={`Route ${rowLabel(row)} via...`}>
-    <RouteTrace row={row} assigned={rowTarget(routingMap(), row)} />
+    {useRouteTrace(row, rowTarget(routingMap(), row)).view}
     <WrapSelect
       cols={cols}
       maxRows={12}
@@ -255,44 +255,49 @@ export const RouteModelLoadingScreen = ({ provider }: { provider: Provider }) =>
 
 const destination = (target?: Target) => target ? `${target.providerId} / ${target.model}` : 'No explicit route';
 
-const wideRouteTrace = (width: number, height: number) => flightWidth(width) >= 72 && height >= 28;
-
-const RouteTrace = ({ row, assigned, proposed }: { row: RouteRow; assigned?: Target; proposed?: Target }) => {
+const useRouteTrace = (row: RouteRow, assigned?: Target, proposed?: Target) => {
   const ink = useTuiInk();
   const { width, height } = useTerminalDimensions();
   const panelWidth = Math.min(flightWidth(width), 76);
-  const wide = wideRouteTrace(width, height);
+  const wide = panelWidth >= 72 && height >= 28;
   const source = rowLabel(row);
   const sourceCols = Math.min(18, Math.max(9, source.length + 2));
   const cols = Math.max(1, panelWidth - (wide ? sourceCols + 21 : 0));
   const changed = proposed && (proposed.model !== assigned?.model || proposed.providerId !== assigned?.providerId);
   const label = (name: string, target?: Target) => {
     const destInk = target ? ink.value : ink.note;
-    if (cols < name.length + 3) return <>
-      {wrapWords(name, cols).map((line, i) => <text key={i} fg={ink.heading} height={1}>{line}</text>)}
-      {wrapWords(destination(target), cols).map((line, i) => <text key={i} fg={destInk} height={1}>{line}</text>)}
-    </>;
+    if (cols < name.length + 3) return [
+      ...wrapWords(name, cols).map((line, i) => <text key={`label-${i}`} fg={ink.heading} height={1}>{line}</text>),
+      ...wrapWords(destination(target), cols).map((line, i) => <text key={i} fg={destInk} height={1}>{line}</text>),
+    ];
     return wrapWords(name + '   ' + destination(target), cols).map((line, i) =>
       <text key={i} fg={destInk} height={1} wrapMode="none">
         {i === 0 ? <><span fg={ink.heading}>{name}</span>{line.slice(name.length)}</> : line}
       </text>);
   };
-  return <box flexDirection={wide ? 'row' : 'column'}>
+  const sourceLines = wrapWords(source, wide ? sourceCols : cols);
+  const assignedLines = label('Assigned', assigned);
+  const proposedLines = proposed ? label('Proposed', proposed) : [];
+  const targetRows = assignedLines.length + proposedLines.length;
+  const rows = wide ? Math.max(8, sourceLines.length, targetRows + 2) : sourceLines.length + targetRows;
+  const view = <box flexDirection={wide ? 'row' : 'column'}>
     <box width={wide ? sourceCols : '100%'} justifyContent="center">
-      {wrapWords(source, wide ? sourceCols : cols).map((part, i) => <text key={i} fg={ink.heading}><strong>{part}</strong></text>)}
+      {sourceLines.map((part, i) => <text key={i} fg={ink.heading}><strong>{part}</strong></text>)}
     </box>
     {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 2 : 0]} /></box>}
     <box flexGrow={1} justifyContent={wide ? 'space-between' : 'flex-start'} paddingY={wide ? 1 : 0}>
-      <box>{label('Assigned', assigned)}</box>
-      {proposed && <box>{label('Proposed', proposed)}</box>}
+      <box>{assignedLines}</box>
+      {proposed && <box>{proposedLines}</box>}
     </box>
   </box>;
+  return { view, rows };
 };
 
 export const RouteConfirmScreen = ({ row, target }: { row: RouteRow; target: Target }) => {
   const ink = useTuiInk();
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row), target);
   return <Panel title="Apply this route?">
-    <RouteTrace row={row} assigned={rowTarget(routingMap(), row)} proposed={target} />
+    {trace.view}
     <text fg={ink.note} marginTop={1}><span fg={ink.value}>Enter</span> apply   <span fg={ink.value}>Esc</span> revise</text>
   </Panel>;
 };
@@ -309,16 +314,16 @@ export const RouteModelPickScreen = ({ row, provider, options, draft, onApply, o
 }) => {
   const [index, setIndex] = useState(Math.max(0, options.indexOf(draft ?? '')));
   const { width, height } = useTerminalDimensions();
-  const traceRows = wideRouteTrace(width, height) ? 8 : 3;
   const chromeRows = commandFrameFits(width, height) ? 10 : 7;
   const assigned = rowTarget(routingMap(), row);
   const model = options[index];
+  const trace = useRouteTrace(row, assigned, model ? { providerId: provider.id, model } : undefined);
   return (
     <Panel title={`Model for ${rowLabel(row)} - ${provider.label}`}>
-      <RouteTrace row={row} assigned={assigned} proposed={model ? { providerId: provider.id, model } : undefined} />
+      {trace.view}
       {/* "(current)" only when the row already targets THIS provider — two providers can list the same id */}
       <ChoiceList
-        height={Math.max(1, Math.min(options.length + 2, 14, height - chromeRows - traceRows))}
+        height={Math.max(1, Math.min(options.length + 2, 14, height - chromeRows - trace.rows))}
         selectedIndex={index}
         onChange={(next) => setIndex(next)}
         showDescription={false}
