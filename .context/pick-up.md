@@ -7,7 +7,7 @@ tags: [context, pick-up]
 
 # Pick up
 
-Wisp 2.3.1 and companion 1.14.14 are published, installed and verified. Read [[active-work]] for release and installation receipts, including the separately running test-build window. No active work is assigned.
+Wisp 2.3.2 and companion 1.14.15 are released, installed and verified. The full Claude alias picker is restored by default; exact budgets are opt-in. Read [[active-work]] for source, review budgets, installation receipts and verification limits. No active work is assigned.
 
 ## Related
 

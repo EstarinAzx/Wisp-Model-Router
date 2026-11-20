@@ -1,7 +1,7 @@
 ---
 type: flows
 project: wisp
-updated: 2026-11-11
+updated: 2026-11-20
 tags: [flows]
 ---
 # Flows
@@ -162,6 +162,17 @@ Historical observation, preserved from the previous main checkout. Later release
 - The adapter decrypts/authenticates original assistant parts before credential refresh or generation, preserves System role3, validates visible history and exact result IDs, then buffers/validates `antigravityNativeResponse` before emitting marker/text/tools/usage. Shared `validateAntigravityFunctionCallPairing` now matches each identified result once; legacy ID-less name matching remains.
 - Classic Copilot returns per-assistant encrypted markers. Local's pinned handler supplies a marker-only assistant header followed by instructions and incremental input; `NativeArgonHistory` restores a bounded32-checkpoint/16MiB process-local history after authenticating the marker. Reload/eviction requires a new Local chat. No Bridge start/secret or conversation disk store is needed.
 - Source contracts and isolated real `vscode.lm` IPC were tested with synthetic credentials/intercepted fetch. Final core2050, Argon38 and Local scoped review pass at427993c; [[active-work]] owns integration and live-acceptance limits.
+
+## Claude Wisp alias switching and exact context (2026-11-20)
+
+- **Question:** Why did the picker show only Antigravity, and how is it restored? **Lens:** diagnosis and implemented flow.
+- **Summary:** Wisp 2.3.2 uses native gateway discovery and live switching by default; `--exact-context` alone requests a signed single-target context profile.
+- **Entry:** `packages/tui/src/claude-wisp.ts:88` (`runClaudeWisp`).
+- **Journey:** `claudeContextLaunch.ts:37` recognizes resume/continue/from-pr. `claude-wisp.ts:100` selects the initial local alias only when explicitly supplied or starting a fresh session; `:109` probes ordinary discovery or negotiates `/claude-code/context` according to mode. `claudeContextLaunch.ts:88` builds child-only transport and removes inherited Wisp profile/budget state for normal mode; `:120` restricts the picker only for an exact profile. `bridgeServer.ts:444` serves the live alias list.
+- **Selection:** Normal resume keeps native selection unless `--model` or `--settings.model` selects a target; the argument wins. Exact resume requires an explicit target and rejects fallback/cross-target switches. Persistent settings, auth and routing are not rewritten.
+- **Evidence:** The original live Bridge returned all four user aliases while the old launcher replaced the picker with its active Antigravity profile. Native Claude 2.1.329 synthetic checks now discover four fixture aliases and switch routes in one normal session; exact profiles preserve 128K/400K/500K/1M and reject another target before upstream IO. The same checks passed on the installed release binary.
+- **Limits:** Native discovery is asynchronous and cached; the SDK inspection follows a real warm-up launch. Normal estimates are not backend capacity guarantees. No live-provider generation or full-window acceptance. [[active-work]] owns the exact release/installation receipts and review budgets.
+- **Updated:** 2026-11-20.
 
 ## Related
 
