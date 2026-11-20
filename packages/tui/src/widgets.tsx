@@ -22,7 +22,7 @@ import { ACCENT, FOREGROUND, SELECT_COLORS } from './theme';
 // A plain text heading also supports Unicode provider and alias names.
 export const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
   <box flexDirection="column" marginTop={1} flexShrink={0}>
-    <text fg={FOREGROUND} wrapMode="none" height={1}><strong>{title}</strong></text>
+    <text fg={FOREGROUND} wrapMode="none" height={1}><span fg={ACCENT}>╶ </span><strong>{title}</strong></text>
     <box marginTop={1}>{children}</box>
   </box>
 );

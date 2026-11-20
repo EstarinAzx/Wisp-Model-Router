@@ -69,16 +69,13 @@ export const RoutingScreen = ({ cols, onPick }: {
   onPick: (section: RoutingSection) => void;
 }) => (
   <Panel title="Routing map">
-    {/* hand-wrapped into per-line rows — opentui's own wrap garbles everything below it */}
-    {wrapWords("Points incoming model names at your Providers — Claude families, exact Codex models, and your own Aliases.", cols)
-      .map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{l}</text>)}
     <WrapSelect
       cols={cols}
       maxRows={12}
       options={[
-        { name: 'Claude Code', description: `the Family routes (${FAMILY_KEYS.join(' / ')})`, value: 'families' },
-        { name: 'Codex', description: 'route each native model independently', value: 'codex' },
-        { name: 'Custom', description: `your named Aliases (${routingMap().aliases.length}) + add`, value: 'aliases' },
+        { name: 'Claude Code', description: FAMILY_KEYS.join(' / '), value: 'families' },
+        { name: 'Codex', description: 'Exact model routes', value: 'codex' },
+        { name: 'Custom', description: `Aliases · ${routingMap().aliases.length}`, value: 'aliases' },
       ]}
       onSelect={(_i, opt) => onPick(opt.value as RoutingSection)}
     />

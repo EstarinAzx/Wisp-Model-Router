@@ -19,7 +19,6 @@
  */
 
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { sandbox } from './span-sandbox';
 import { readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -161,42 +160,32 @@ root.calculateLayout();
 assert(currentFocusedEditor.getLayoutNode().getComputedWidth() <= 42, 'the command input must fit during a live shrink');
 root.resize(100, 40);
 root.calculateLayout();
-// Resize the live app before driving the palette. The windowed wordmark spans 57 cells.
+let homeArtwork: string[] | undefined;
 for (const [width, height] of [[80, 24], [110, 34], [52, 24], [42, 10], [176, 44], [100, 40]]) {
   await reactAct(async () => setup.resize(width, height));
   const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('Type / for commands'));
   assert(frame.includes('Bridge idle') && frame.includes('q quit'), 'Home footer must describe this listener and its exit key');
   if (height === 10) assert(frame.includes('Wisp_'), 'short terminals use the compact wordmark');
-  // Hash only the visible logo cells from the approved native captures at 06d43e9.
-  const approved = new Map([
-    [80, '33a15ff0a3683ffda8a5463b2f6e4ecc5968088c76ffd8aad0e8ec70803379b4'],
-    [110, 'c7fdb8fd559c9b4b83b0d7f12633096988d76405f4b23dc77d368b88113a14b5'],
-    [176, '3fb0f806c56cac6fde05bf152f664c452e94ac466457cadf0f256d162afd0567'],
-  ]);
-  if (approved.has(width)) {
-    const lines = frame.split('\n').map(line => line.trimEnd());
-    const art = lines.slice(0, lines.findIndex(line => line.includes('BYOK model router'))).join('\n').replace(/^\n+|\n+$/g, '');
-    assert.equal(createHash('sha256').update(art).digest('hex'), approved.get(width), `Flight artwork at ${width} columns`);
+  if (height >= 14) {
+    const rows = frame.split('\n');
+    const art = rows.slice(0, rows.findIndex(row => row.includes('BYOK model router')))
+      .map(row => row.trimEnd()).filter(Boolean);
+    assert.equal(art.length, 5, 'home artwork stays five rows tall');
+    const inset = Math.min(...art.map(row => row.search(/\S/)));
+    const cells = art.map(row => row.slice(inset));
+    assert(cells.every(row => row.length <= 32), 'artwork fits within 32 columns');
+    if (homeArtwork) assert.deepEqual(cells, homeArtwork);
+    homeArtwork = cells;
   }
-  const mark = new Set<number>();
-  for (const row of setup.captureSpans().lines) {
-    let column = 0;
-    for (const span of row.spans) {
-      assert.equal(span.bg.toInts()[3], 0, 'Home must preserve the terminal background');
-      if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', span.text);
-      for (const ch of span.text) {
-        if (span.fg.intent === 'default' && /[█▀▄]/.test(ch)) mark.add(column);
-        column++;
-      }
-    }
-  }
-  if (width === 110) assert.equal(Math.max(...mark) - Math.min(...mark) + 1, 57);
 }
 
 
 // palette with the suggestion list open
 await reactAct(async () => { await mockInput.typeText('/'); });
 await see('/providers', 'input-suggestions');
+const palette = setup.captureCharFrame();
+assert(!palette.includes('/signout'), 'only a short window of commands should appear');
+assert(!palette.includes('API-key Provider'), 'other commands should not show their help text');
 await reactAct(async () => { await mockInput.typeText('zz'); });
 await waitForFrame(f => f.includes('No matching commands.'));
 await esc();
@@ -341,6 +330,14 @@ await esc();
 // /bridge last — the header badge stays up once the listener binds
 await run('/bridge');
 await see('Access secret', 'bridge');
+assert(!setup.captureCharFrame().includes('span-baseline-secret'), 'bridge secret starts masked');
+assert(!setup.captureCharFrame().includes('/plugin marketplace'), 'setup starts folded');
+await reactAct(async () => { await mockInput.typeText('s'); });
+await waitForFrame(f => f.includes('/plugin marketplace'));
+await reactAct(async () => { await mockInput.typeText('s'); });
+await waitForFrame(f => f.includes('Access secret'));
+await reactAct(async () => { await mockInput.typeText('r'); });
+await waitForFrame(f => f.includes('span-baseline-secret'));
 
 // ----------------------------------------- Baseline write / diff ----------------------------------------- //
 

@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { SLASH_COMMANDS, listLogSessions, readSessionLog, formatSessionLog } from '@wisp/core';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { FOREGROUND } from './theme';
 import { ChoiceList, Panel, wrapWords } from './widgets';
 import { sessionLabel, sessionDetail } from './bridgeLog';
@@ -25,41 +26,34 @@ export const InfoScreen = ({ title, lines, cols, maxRows, pending }: { title: st
 // ----------------------------------------- /bridge ----------------------------------------- //
 
 // The Bridge info panel — connection facts for the session's own listener.
-export const BridgeScreen = ({ address, secret, cols }: { address: string; secret: string; cols: number }) => (
-  <Panel title="Bridge">
-    <text fg={FOREGROUND} wrapMode="none"><strong>● up</strong> · port {address.slice(address.lastIndexOf(':') + 1)}</text>
-
-    <box marginTop={1} flexDirection="column">
-      <text fg={FOREGROUND} wrapMode="none">{'OpenAI door'.padEnd(16)}{address}/v1</text>
-      <text fg={FOREGROUND} wrapMode="none">{'Anthropic door'.padEnd(16)}{address}</text>
-      <text fg={FOREGROUND} wrapMode="none">{'Access secret'.padEnd(16)}{secret}</text>
-    </box>
-
-    <box marginTop={1} flexDirection="column">
-      <text fg={FOREGROUND} wrapMode="none">{'Claude Code'.padEnd(16)}claude-wisp [args…]</text>
-      <text wrapMode="none" fg={FOREGROUND}>{''.padEnd(16)}launches claude wired to this Bridge</text>
-    </box>
-
-    {/* why the plugin exists: Claude only knows Claude names; the plugin bridges that gap.
-        Placement + gold nudge + install line stay; body is the why-explanation (#130). */}
-    <box marginTop={1} flexDirection="column">
-      {wrapWords('Claude Code only knows Claude model names. The wisp-slot plugin bridges that gap — it makes the session aware that its family names resolve through Wisp\'s Routing map (session announcement, [WISP] statusline badge, Slot skill). Install: /plugin marketplace add EstarinAzx/Wisp-Router', cols - 2)
-        .map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{l}</text>)}
-    </box>
-
-    {/* Advisor now works through Wisp (the door plays the server-tool role — 2.0.21). The
-        claude-wisp launcher sets CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL so /advisor is
-        offered for the claude-wisp-* aliases (which carry no advisor_rank). Note here, where
-        Claude Code gets wired. Hand-wrapped (panel rows never use opentui wrap); -2 = the
-        panel's inner padding. Plain-text, no glyph — ambiguous-width smears on Windows fonts. */}
-    <box marginTop={1} flexDirection="column">
-      {wrapWords("Advisor works through Wisp: /advisor picks the reviewer model, routed through your Routing map. claude-wisp enables it automatically; a manual setup needs CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1.", cols - 2)
-        .map((l, i) => <text key={i} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{l}</text>)}
-    </box>
-
-    <text wrapMode="none" fg={FOREGROUND} marginTop={1}>Esc closes — listener stays up · /bridge off stops · /quit kills</text>
-  </Panel>
-);
+export const BridgeScreen = ({ address, secret, cols }: { address: string; secret: string; cols: number }) => {
+  const [setup, setSetup] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const { height } = useTerminalDimensions();
+  useKeyboard(key => {
+    if (key.ctrl || key.meta) return;
+    if (key.name === 's') { setSetup(!setup); setRevealed(false); }
+    if (!setup && key.name === 'r') setRevealed(!revealed);
+  });
+  const lines = setup ? [
+    'Launch       claude-wisp [args…]',
+    'Wisp Slot    /plugin marketplace add EstarinAzx/Wisp-Router',
+    'Wisp Slot shows Claude Code which families use your Routing map.',
+    'Advisor      claude-wisp enables /advisor automatically. For manual setup, set CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1.',
+    'Stop         /bridge off',
+  ] : [
+    'OpenAI         ' + address + '/v1',
+    'Anthropic      ' + address,
+    'Access secret  ' + (revealed ? secret : '••••••'),
+  ];
+  const rows = lines.flatMap(line => line.length < cols ? [line] : wrapWords(line, Math.max(1, cols - 1)));
+  return <Panel title={setup ? 'Bridge / Client setup' : 'Bridge'}>
+    <scrollbox focused scrollY height={Math.max(1, Math.min(rows.length, height - 8))}>
+      {rows.map((row, i) => <text key={i} height={1} wrapMode="none" fg={FOREGROUND}>{row}</text>)}
+    </scrollbox>
+    <text fg={FOREGROUND} marginTop={1}>{setup ? 'S back · ↑↓ scroll · Esc close' : `R ${revealed ? 'hide' : 'reveal'} · S setup · Esc close`}</text>
+  </Panel>;
+};
 
 // ----------------------------------------- /show-log ----------------------------------------- //
 
@@ -70,13 +64,13 @@ export const SessionListScreen = ({ onSelect }: { onSelect: (id: string) => void
   const [sessions, setSessions] = useState(() => listLogSessions());
   useEffect(() => { const timer = setInterval(() => setSessions(listLogSessions()), 1000); return () => clearInterval(timer); }, []);
   return <Panel title="Chat sessions">
-    <text wrapMode="none" fg={FOREGROUND}>Recent activity · last 30 minutes · all Wisp hosts</text>
+    {sessions.length > 0 && <text fg={FOREGROUND}>Last 30 minutes · All hosts</text>}
     {sessions.length ? <ChoiceList
       height={Math.min(sessions.length * 2, 12)}
       options={sessions.map(session => ({ name: sessionLabel(session), description: sessionDetail(session), value: session.id }))}
       onSelect={(_, option) => { if (option?.value) onSelect(String(option.value)); }} />
-      : <text wrapMode="none" fg={FOREGROUND}>No recent chat sessions.</text>}
-    <text wrapMode="none" fg={FOREGROUND}>Enter opens · Esc closes · IDs are copyable</text>
+      : <text wrapMode="none" fg={FOREGROUND}>No sessions in the last 30 minutes.</text>}
+    <text wrapMode="none" fg={FOREGROUND}>{sessions.length ? 'Enter open · Esc back' : 'Esc back'}</text>
   </Panel>;
 };
 

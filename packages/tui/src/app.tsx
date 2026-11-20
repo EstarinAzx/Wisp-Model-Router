@@ -320,6 +320,7 @@ export const App = () => {
 
   // ----- command dispatch (Enter in the palette) -----
   const runCommand = (raw: string) => reportActionError(() => {
+    setStatus('');
     const parsed = parseSlash(raw);
     if (!parsed) { setStatus(raw.trim() ? 'Not a command — type / for the palette.' : ''); return; }
     // A unique partial match completes on Enter — that IS the autocomplete contract (/pr → /providers).
@@ -448,7 +449,7 @@ export const App = () => {
             // Show the info screen only if the user is still on the palette (a slow bind must not yank a
             // screen they navigated to) — the status line announces the start wherever they are.
             setMode((m) => m.kind === 'input' ? info : m);
-            setStatus('Bridge started — /bridge off to stop.');
+
           },
           (err) => {
             bridgeStarting.current = false;
@@ -564,7 +565,7 @@ export const App = () => {
         : mode.kind === 'test' && mode.phase !== 'streaming' ? backToInput() // finished screen just closes
         : mode.kind === 'log' || mode.kind === 'logs' ? setMode(logBackMode(mode))
         : mode.kind === 'bridge' || mode.kind === 'help' || mode.kind === 'info' ? backToInput() // info screens just close — nothing to cancel
-        : backToInput('Cancelled.');
+        : backToInput();
       return;
     }
     if (mode.kind !== 'key-entry') return;
@@ -600,16 +601,15 @@ export const App = () => {
         <text fg={FOREGROUND}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
         <text fg={FOREGROUND}>{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
       </box>}
-      {mode.kind === 'input' && !isHome && <text fg={FOREGROUND} marginY={1}><strong>Commands</strong></text>}
+      {mode.kind === 'input' && !isHome && <text fg={FOREGROUND} marginY={1}><strong>Commands</strong>{suggestions.length > 5 && <span>  {highlight + 1}/{suggestions.length}</span>}</text>}
 
       {mode.kind === 'input' && (
         <PaletteScreen
           inputRef={inputRef}
-          cols={panelCols}
           maxRows={Math.max(1, termHeight - 10 - feedback.length)}
           suggestions={suggestions}
           highlight={highlight}
-          onInput={(value: string) => { setLine(value); setSelIdx(0); }}
+          onInput={(value: string) => { if (value && status) setStatus(''); setLine(value); setSelIdx(0); }}
           onSubmit={submitLine}
         />
       )}
@@ -737,7 +737,7 @@ export const App = () => {
           <text fg={FOREGROUND} wrapMode="none">{`v${pkg.version} · ${bridge.isRunning() ? 'Bridge up :' + bridgePort() : 'Bridge idle'}`}</text>
           <text fg={FOREGROUND}>q quit</text>
         </> : <text fg={FOREGROUND} wrapMode="none">{panelCols >= 48
-          ? '↑↓ select   Tab complete   Enter open   Esc home'
+          ? '↑↓ select · Tab complete · Enter open · Esc back'
           : '↑↓ select · Tab · Enter · Esc'}</text>}
       </box>}
       {isPicker && <box border={['top']} borderColor={RULE} marginTop={1} flexDirection="row" justifyContent="space-between">
