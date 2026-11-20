@@ -94,7 +94,14 @@ test('a nested launcher resolves its inherited generated identity back to the si
   expect(() => resolveClaudeContextSelection(p.id, {}, 'secret')).toThrow(/alias/i);
 });
 
-test.each([{ dispatched: false, exact: false }, { dispatched: true, exact: false }, { dispatched: false, exact: true }, { dispatched: true, exact: true }])('launcher modes clean up: %j', async ({ dispatched, exact }) => {
+test.each([
+  { dispatched: false, exact: false, fromPr: false, override: true },
+  { dispatched: true, exact: false, fromPr: false, override: true },
+  { dispatched: false, exact: true, fromPr: false, override: true },
+  { dispatched: true, exact: true, fromPr: false, override: true },
+  { dispatched: false, exact: false, fromPr: true, override: false },
+  { dispatched: true, exact: false, fromPr: true, override: true },
+])('launcher modes clean up: %j', async ({ dispatched, exact, fromPr, override }) => {
   const dir = mkdtempSync(join(tmpdir(), 'wisp-claude-launch-'));
   const p = profile(), token = signClaudeContext(p, 'secret');
   const captured = join(dir, 'capture.json');
@@ -120,7 +127,7 @@ test.each([{ dispatched: false, exact: false }, { dispatched: true, exact: false
   writeFileSync(join(dir, 'home', 'config.json'), JSON.stringify({ provider: 'xai', routing: { families: {}, aliases: [{ name: 'grok', target: { providerId: 'xai', model: 'grok-4.7' } }] }, bridge: { port } }));
   try {
     const entry = dispatched ? [resolve(import.meta.dir, '../src/index.tsx'), 'claude-wisp'] : [resolve(import.meta.dir, '../src/claude-wisp.ts')];
-    const child = Bun.spawn([process.execPath, ...entry, ...(exact ? ['--exact-context'] : []), '--model', 'grok', '-p', 'literal text'], {
+    const child = Bun.spawn([process.execPath, ...entry, ...(exact ? ['--exact-context'] : []), ...(fromPr ? ['--from-pr', '123'] : []), ...(override ? ['--model', 'grok'] : []), '-p', 'literal text'], {
       cwd: dir, env: { ...process.env, WISP_HOME: join(dir, 'home'), PATH: [dir, dirname(node), join(process.env.SystemRoot ?? 'C:/Windows', 'System32')].join(delimiter),
         CLAUDE_CODE_MAX_CONTEXT_TOKENS: '', WISP_CLAUDE_CONTEXT_PROFILE: '', ANTHROPIC_CUSTOM_HEADERS: '', DISABLE_COMPACT: '', DISABLE_AUTO_COMPACT: '', CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT: '' }, stdout: 'pipe', stderr: 'pipe',
     });
@@ -130,7 +137,9 @@ test.each([{ dispatched: false, exact: false }, { dispatched: true, exact: false
     expect(negotiated).toEqual(exact ? { model: 'grok' } : undefined);
     expect(requests).toEqual([exact ? '/claude-code/context' : '/v1/models']);
     expect(output.window).toBe(exact ? '500000' : '');
-    expect(output.settings.model).toBe(exact ? p.id : 'claude-wisp-grok');
+    expect(output.settings.model).toBe(exact ? p.id : override ? 'claude-wisp-grok' : undefined);
+    expect(output.args.includes('--model')).toBe(override);
+    if (fromPr) expect(output.args.slice(output.args.indexOf('--from-pr'), output.args.indexOf('--from-pr') + 2)).toEqual(['--from-pr', '123']);
     expect(output.settings.availableModels).toEqual(exact ? [p.id] : undefined);
     expect(output.args.slice(-2)).toEqual(['-p', 'literal text']);
     expect(existsSync(output.file)).toBe(false);
@@ -195,4 +204,18 @@ test('normal mode retains transport conflict checks and explicit picker restrict
   const launch = buildClaudeContextLaunch(1234, 'secret', undefined, undefined, parsed, {});
   expect(launch.settings.availableModels).toEqual(['claude-wisp-Astra']);
   expect(launch.settings.enforceAvailableModels).toBe(true);
+});
+
+
+test.each([{ args: ['--from-pr'] }, { args: ['--from-pr', '123'] }, { args: ['--from-pr=https://github.com/example/repo/pull/123'] }])('PR-linked resume keeps native model selection: %j', ({ args }) => {
+  const parsed = parseClaudeContextArgs(args);
+  expect(parsed.resume).toBe(true);
+  expect(parsed.args).toEqual(args);
+  const launch = buildClaudeContextLaunch(1234, 'secret', undefined, undefined, parsed, {});
+  expect(launch.args).toEqual(args);
+  expect(launch.settings.model).toBeUndefined();
+  const selected = parseClaudeContextArgs([...args, '--model', 'claude-wisp-Astra']);
+  expect(buildClaudeContextLaunch(1234, 'secret', undefined, undefined, selected, {}).args).toEqual(['--model', 'claude-wisp-Astra', ...args]);
+  expect(() => parseClaudeContextArgs([...args, '--exact-context'])).toThrow(/--model/);
+  expect(parseClaudeContextArgs([...args, '--exact-context', '--model', 'Astra']).model).toBe('Astra');
 });

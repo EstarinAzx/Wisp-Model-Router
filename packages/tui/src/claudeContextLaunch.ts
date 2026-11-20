@@ -34,7 +34,7 @@ export const parseClaudeContextArgs = (args: readonly string[]): ClaudeContextAr
       continue;
     }
     if (/^--fallback-model(?:=|$)/.test(arg)) fallback = true;
-    if (/^(?:--resume|--continue)(?:=|$)/.test(arg) || arg === '-r' || arg === '-c') result.resume = true;
+    if (/^(?:--resume|--continue|--from-pr)(?:=|$)/.test(arg) || arg === '-r' || arg === '-c') result.resume = true;
     result.args.push(arg);
     if (values.has(arg)) {
       if (args[i + 1] === undefined) throw new Error(`Missing value for ${arg}.`);
