@@ -2,7 +2,7 @@
 
 **Experimental Desktop bridge:** ChatGPT Desktop (Codex) can use Wisp aliases alongside native models. See the [README preview](https://github.com/EstarinAzx/Wisp-Router#chatgpt-desktop-codex-bridge--experimental). Compatibility varies by Provider and model; verification boundaries are described below.
 
-**Companion 1.14.10:** the shared Bridge supports exact-context Claude launcher profiles and uses Anthropic's 2.1.322 request stamp. Native Copilot context-meter behavior is unchanged. See [2.2.13 verification and limits](../../docs/releases/v2.2.13.md).
+**Companion 1.14.14:** the shared Bridge uses Claude Code request stamp 2.1.329 and includes the shared catalog updates. Native Copilot context-meter behavior is unchanged. See the [2.3.1 release notes](../../docs/releases/v2.3.1.md).
 
 The companion retains the existing Desktop behavior: the extension-hosted Bridge implements terminal 2.2.13's signed desktop protocol 5, including native voice signaling and qualified opt-in Antigravity routing. Native Codex names retain their full capabilities and desktop sign-in despite shared route overrides or Alias collisions. Configuration, refresh and rollback belong to terminal `wisp codex-desktop` or `/gpt-desktop on|off` in its TUI. Installation and running-Bridge handover are separate actions. [Desktop setup and limits](https://github.com/EstarinAzx/Wisp-Router/blob/main/docs/codex-desktop.md).
 

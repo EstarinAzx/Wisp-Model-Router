@@ -47,6 +47,7 @@ export type Mode =
   // and can write auth.json — a side effect that must not live in JSX).
   | { kind: 'bridge'; address: string; secret: string }
   | { kind: 'help' }
+  | { kind: 'guide'; chapter?: number }
   | { kind: 'info'; title: string; lines: string[]; abort?: AbortController }
   | { kind: 'logs' }
   | { kind: 'log'; id: string }
@@ -58,7 +59,8 @@ export type Mode =
   | { kind: 'routing-section'; section: RoutingSection }
   | { kind: 'alias-name' }
   | { kind: 'alias-rename'; name: string }
-  | { kind: 'route-provider'; row: RouteRow }
+  | { kind: 'alias-actions'; name: string }
+  | { kind: 'route-provider'; row: RouteRow; fromAliasActions?: true }
   | { kind: 'route-model-loading'; row: RouteRow; provider: Provider }
   | RouteEditor
   | { kind: 'route-confirm'; editor: RouteEditor; target: Target };

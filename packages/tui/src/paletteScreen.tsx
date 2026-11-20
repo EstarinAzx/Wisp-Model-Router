@@ -20,7 +20,8 @@ export const PaletteScreen = ({ inputRef, cols, maxRows, suggestions, highlight,
   return <>
     <box flexDirection="row" border={['bottom']} borderColor={RULE} flexShrink={0}>
       <text height={1} fg={ACCENT}>›   </text>
-      <input ref={inputRef} {...INPUT_COLORS} flexGrow={1} placeholder="Type / for commands"
+      <input ref={inputRef} {...INPUT_COLORS} flexGrow={1}
+        placeholder={cols >= 48 ? 'Type / for commands · /guide to get started' : 'Type / for commands'}
         focused onInput={onInput} onSubmit={onSubmitText(onSubmit)} />
     </box>
     {visible.length > 0 && <box marginTop={1}>

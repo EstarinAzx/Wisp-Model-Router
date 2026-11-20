@@ -1,6 +1,8 @@
 // Draw in Braille's native 2 × 4 dot grid.
 export const colors = ['#100e17', '#614980', '#895baa', '#ad77ef', '#d3a7ff', '#fff0ff']
 export type Run = { text: string, ink: number }
+const flameBend = [0, 3, 1, -2]
+export const flamePhases = flameBend.length
 type Point = readonly [number, number]
 type Bezier = readonly [Point, Point, Point, Point]
 function curve([a,b,c,d]: Bezier, steps=72) {
@@ -34,9 +36,14 @@ function drawing(width: number, height: number) {
       }
     }
   }
-  function flame(x: number,y: number,scale: number) {
+  function flame(x: number,y: number,scale: number, phase: number) {
     function layer(segments: Bezier[], tone: number) {
-      const shape = segments.flatMap(segment=>curve(segment)).map(([u,v]): Point => [x+u*scale,y+v*scale])
+      const shape = segments.flatMap(segment=>curve(segment)).map(([u,v]): Point => {
+        // Leave the base anchored; the tip and bright core can sway independently of the wake.
+        const bend = flameBend[phase] * Math.max(0, (10-v)/33) ** 2
+        const lift = tone === 5 ? flameBend[phase] * Math.max(0, (9-v)/12) : 0
+        return [x+(u+bend)*scale, y+(v-lift)*scale]
+      })
       fill(shape,tone)
     }
     layer([
@@ -81,7 +88,20 @@ function drawing(width: number, height: number) {
       return runs
     })
   }
-  return {line, dot, flame, finish}
+  // Each pixel occupies one terminal quadrant; keep the bright core and closed base at this size.
+  function smallFlame(left: number, top: number, phase: number) {
+    const tip = ['    3    ', '     3   ', '    3    ', '   3     '][phase]
+    const neck = ['   33    ', '    33   ', '    33   ', '   33    '][phase]
+    const pixels = [tip, neck, '  3333 3 ', '3 344433 ', '333455433', ' 3455543 ', '  33433  ', '    3    ']
+    for (const [row, pixelsRow] of pixels.entries()) {
+      for (let col = 0; col < pixelsRow.length; col++) {
+        const tone = Number(pixelsRow[col])
+        solid[top+row*2][left+col] = tone
+        solid[top+row*2+1][left+col] = tone
+      }
+    }
+  }
+  return {line, dot, flame, smallFlame, finish}
 }
 const letterforms = [
   ['##     ##','##     ##','##     ##','##     ##','##  #  ##','## ### ##','## ### ##',' ### ### ',' ### ### ','  #   #  ','         ','         '],
@@ -102,7 +122,7 @@ export function wordmark(width:number) {
 
 // The three curves and the flame form one Lantern emblem. Flight attaches its wake
 // to the start of the lower curl instead of drawing a second version of the emblem.
-export function homeArt(width:number, scale:1|2, nameWidth:number, flying:boolean) {
+export function homeArt(width:number, scale:1|2, nameWidth:number, flying:boolean, phase = 0) {
   const left=flying ? 2*(width-lanternWidth*scale) : 0
   const pt=(x:number,y:number):Point=>[left+x*scale,y*scale]
   const d=drawing(width,(flying?14:10)*scale)
@@ -114,14 +134,15 @@ export function homeArt(width:number, scale:1|2, nameWidth:number, flying:boolea
   d.line([pt(4,33),pt(8,17),pt(51,45),pt(53,24)],2)
   d.line([pt(53,24),pt(54,18),pt(48,15),pt(41,16)],1)
   d.line([pt(4,33),pt(13,25),pt(30,40),pt(43,29)],3)
-  d.flame(left+34*scale,20*scale,.86*scale)
+  d.flame(left+34*scale,20*scale,.86*scale,phase)
   return d.finish()
 }
-export function routeArt(target: number) {
+export function routeArt(target: number, phase = 0) {
   const d = drawing(21,8)
-  const end = 6+target*10
-  d.line([[0,14],[16,15],[17,end-10],[34,end]],4)
-  d.line([[6,16],[19,18],[21,end-7],[34,end+1]],2)
-  d.flame(36,end-1,.26)
+  const top = target*8
+  const end = top+9
+  d.line([[0,14],[16,15],[17,end-10],[32,end]],4)
+  d.line([[6,16],[19,18],[21,end-7],[32,end+1]],2)
+  d.smallFlame(31,top,phase)
   return d.finish()
 }

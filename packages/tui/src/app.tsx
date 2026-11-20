@@ -13,7 +13,7 @@
  *   - ./providerScreens: the ten provider-flow Screens + that flow's helpers (#117) — the
  *     shell imports the Screens plus fetchModelOptions, oauthProviders, saveKey.
  *   - ./routingScreens: the eight routing-flow Screens + that flow's row helpers (#118) — the
- *     shell imports the Screens plus routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS.
+ *     shell imports the Screens plus routingMap, rowLabel, sectionOf.
  *   - ./paletteScreen: the palette Screen (#119) — the shell keeps line/selIdx and Enter semantics.
  *   - ./testScreen: the test Screen + streamTestReply (#119) — re-exported below for headless use.
  *   - ./infoScreens: the static bridge/help info Screens (#119).
@@ -34,6 +34,7 @@ import {
   FAMILY_KEYS, withFamilyRoute, withAlias, withoutAlias, withCodexModelRoute,
   type Provider, type EffortLevel, type Target,
 } from '@wisp/core';
+import type { ClaudeFamilyModels } from './claudeFamilyModels';
 import { fetchEffortOptions } from './modelFetch';
 import { home, activeProvider, codexAuth, anthropicAuth, xaiAuth, kimiAuth, antigravityAuth, quotaCurrent } from './store';
 import { detectExternalBridge } from './bridgePresence';
@@ -49,11 +50,12 @@ import {
   ModelPickScreen, ModelFreeScreen, OauthPickScreen, SigninWaitScreen, EffortPickScreen,
 } from './providerScreens';
 import {
-  routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS,
-  RoutingScreen, RoutingSectionScreen, AliasNameScreen, AliasRenameScreen, RouteProviderScreen,
+  routingMap, rowLabel, sectionOf,
+  RoutingScreen, RoutingSectionScreen, AliasActionsScreen, AliasNameScreen, AliasRenameScreen, RouteProviderScreen,
   RouteModelLoadingScreen, RouteConfirmScreen, RouteModelPickScreen, RouteModelFreeScreen,
 } from './routingScreens';
 import { PaletteScreen } from './paletteScreen';
+import { GuideScreen } from './guideScreen';
 import { TestScreen, streamTestReply } from './testScreen';
 import { BridgeScreen, HelpScreen, InfoScreen, LogScreen, SessionListScreen } from './infoScreens';
 import { copyText } from './clipboard';
@@ -71,7 +73,7 @@ import pkg from '../package.json';
 // ----------------------------------------- /routing ----------------------------------------- //
 
 // The routing-row helpers moved to routingScreens.tsx with #118 — the shell's starters import
-// routingMap/rowLabel/sectionOf/CLAUDE_FAMILY_MODELS from there.
+// routingMap/rowLabel/sectionOf from there.
 
 // ----------------------------------------- /test ----------------------------------------- //
 
@@ -156,7 +158,7 @@ export const App = () => {
   const framed = !isHome && commandFrameFits(termWidth, termHeight);
   const panelCols = Math.min(flightWidth(termWidth), isHome ? termWidth : 76);
   const isPicker = ['providers', 'provider-menu', 'key-pick', 'model-pick', 'oauth-pick', 'effort-pick',
-    'routing', 'routing-section', 'route-provider', 'route-model-pick'].includes(mode.kind);
+    'routing', 'routing-section', 'alias-actions', 'route-provider', 'route-model-pick'].includes(mode.kind);
   const feedback = status ? wrapWords(status, panelCols) : [];
   const artHeight = termHeight - (feedback.length ? feedback.length + 1 : 0);
 
@@ -219,6 +221,15 @@ export const App = () => {
   const backToSection = (section: RoutingSection, message?: string) => {
     if (message) setStatus(message);
     setMode({ kind: 'routing-section', section });
+  };
+
+  const openRouteRow = (row: RouteRow) => {
+    setStatus('');
+    if (row.kind === 'alias' && routingMap().aliases.some(alias => alias.name === row.name)) {
+      setMode({ kind: 'alias-actions', name: row.name });
+    } else {
+      setMode({ kind: 'route-provider', row });
+    }
   };
 
   const reportActionError = (action: () => void) => {
@@ -299,14 +310,14 @@ export const App = () => {
 
   // The families screen's one-tap bind: point all four Family routes at the Anthropic subscription
   // models. Signed out → run the browser sign-in first and bind the moment the tokens land.
-  const bindClaudeFamilies = () => {
+  const bindClaudeFamilies = (models: ClaudeFamilyModels) => {
     const p = PROVIDERS.find(isAnthropicProvider);
     if (!p) return;
     const apply = () => reportActionError(() => {
       // withFamilyRoute can't refuse here — the Target names a catalog row by construction.
       home.updateConfig(cfg => {
         let map = cfg.routing ?? EMPTY_ROUTING_MAP;
-        for (const f of FAMILY_KEYS) map = withFamilyRoute(map, PROVIDERS, f, { providerId: p.id, model: CLAUDE_FAMILY_MODELS[f] })!;
+        for (const f of FAMILY_KEYS) map = withFamilyRoute(map, PROVIDERS, f, { providerId: p.id, model: models[f] })!;
         return { ...cfg, routing: map };
       });
       // short on purpose — the status row is single-line chrome that clips on narrow terminals
@@ -532,6 +543,7 @@ export const App = () => {
       // Opens with the Bridge in any state (#122) — the Screen itself shows the not-running hint.
       case 'show-log': setMode({ kind: 'logs' }); return;
       case 'help': setMode({ kind: 'help' }); return;
+      case 'guide': setMode({ kind: 'guide' }); return;
       case 'quit': exitTui(); return;
       default: setStatus(`Unknown command: /${command}`);
     }
@@ -600,12 +612,16 @@ export const App = () => {
         : mode.kind === 'provider-menu' ? backToProviders()
         : mode.kind === 'key-entry' && mode.origin === 'menu' ? backToMenu(mode.provider)
         : mode.kind === 'signin-wait' && mode.origin === 'menu' ? backToMenu(mode.provider)
+        : mode.kind === 'alias-actions' ? backToSection('aliases')
+        : mode.kind === 'route-provider' && mode.row.kind === 'alias' && mode.fromAliasActions
+          ? setMode({ kind: 'alias-actions', name: mode.row.name })
         : mode.kind === 'alias-name' || mode.kind === 'alias-rename' ? backToSection('aliases', 'Cancelled.')
         : mode.kind === 'route-provider' || mode.kind === 'route-model-loading' || mode.kind === 'route-model-pick' || mode.kind === 'route-model-free'
           ? backToSection(sectionOf(mode.row), 'Cancelled.')
         : mode.kind === 'routing-section' ? setMode({ kind: 'routing' })
         : mode.kind === 'test' && mode.phase !== 'streaming' ? backToInput() // finished screen just closes
         : mode.kind === 'log' || mode.kind === 'logs' ? setMode(logBackMode(mode))
+        : mode.kind === 'guide' && mode.chapter !== undefined ? setMode({ kind: 'guide' })
         : mode.kind === 'bridge' || mode.kind === 'help' || mode.kind === 'info' ? backToInput() // info screens just close — nothing to cancel
         : backToInput();
       return;
@@ -705,6 +721,9 @@ export const App = () => {
       {mode.kind === 'log' && <LogScreen id={mode.id} cols={panelCols} />}
 
       {mode.kind === 'help' && <HelpScreen onDone={backToInput} />}
+      {mode.kind === 'guide' && <GuideScreen chapter={mode.chapter} cols={panelCols}
+        maxRows={termHeight - (framed ? 10 : 7) - feedback.length}
+        onRead={chapter => setMode({ kind: 'guide', chapter })} />}
 
       {mode.kind === 'info' && <InfoScreen title={mode.title} lines={mode.lines} cols={panelCols} maxRows={termHeight - 9 - feedback.length} pending={!!mode.abort} />}
 
@@ -718,7 +737,7 @@ export const App = () => {
           cols={panelCols}
           onAddAlias={() => setMode({ kind: 'alias-name' })}
           onBind={bindClaudeFamilies}
-          onPickRow={(row) => { setStatus(''); setMode({ kind: 'route-provider', row }); }}
+          onPickRow={openRouteRow}
         />
       )}
 
@@ -726,7 +745,7 @@ export const App = () => {
         <AliasNameScreen
           onBack={(message) => backToSection('aliases', message)}
           onStatus={setStatus}
-          onNamed={(name) => setMode({ kind: 'route-provider', row: { kind: 'alias', name } })}
+          onNamed={name => openRouteRow({ kind: 'alias', name })}
         />
       )}
 
@@ -738,12 +757,17 @@ export const App = () => {
         />
       )}
 
+      {mode.kind === 'alias-actions' && (
+        <AliasActionsScreen name={mode.name} cols={panelCols}
+          onChangeProvider={() => setMode({ kind: 'route-provider', row: { kind: 'alias', name: mode.name }, fromAliasActions: true })}
+          onRename={() => setMode({ kind: 'alias-rename', name: mode.name })}
+          onRemove={() => clearRow({ kind: 'alias', name: mode.name })} />
+      )}
       {mode.kind === 'route-provider' && (
         <RouteProviderScreen
           row={mode.row}
           cols={panelCols}
           onClear={() => clearRow(mode.row)}
-          onRename={(name) => setMode({ kind: 'alias-rename', name })}
           onPick={(p) => startRouteModel(mode.row, p)}
         />
       )}
@@ -786,7 +810,8 @@ export const App = () => {
           : '↑↓ select · Tab · Enter · Esc'}</text>}
       </box>}
       {isPicker && <box border={['top']} borderColor={RULE} marginTop={1} flexDirection="row" justifyContent="space-between">
-        <text fg={ink.note} wrapMode="none">↑↓ select   Enter choose   Esc back</text>
+        <text fg={ink.note} wrapMode="none">{panelCols >= 44
+          ? '↑↓ select   Enter choose   Esc back' : '↑↓ select  Enter  Esc back'}</text>
         <text fg={ink.note}>q quit</text>
       </box>}
       {feedback.length > 0 && <box marginTop={1} flexShrink={0}>

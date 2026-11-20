@@ -25,6 +25,8 @@ commands use the same exact-version optional dependency or release-download cach
 
 ## Quick start
 
+Inside Wisp, type `/guide` for a first-route walkthrough or `/help` for the command list. For still flames, set `WISP_REDUCED_MOTION=1` before launching Wisp.
+
 ```
 wisp            # the TUI — type / for commands (/providers, /key, /model, /routing, /bridge, …)
 wisp serve      # headless Bridge host

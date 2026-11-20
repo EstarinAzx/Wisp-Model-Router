@@ -15,20 +15,21 @@
  *     and Esc step-back routing, importing the row helpers it needs from here.
  *
  * Extracted from app.tsx with #118: the eight routing-flow Screens plus the routing-row
- * helpers only this flow uses (routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS are
+ * helpers only this flow uses (routingMap, rowLabel, sectionOf are
  * shared with the shell's starters).
  */
 
 import {
-  PROVIDERS, FAMILY_KEYS, EMPTY_ROUTING_MAP, withAliasRenamed,
+  PROVIDERS, FAMILY_KEYS, EMPTY_ROUTING_MAP, withAliasRenamed, getModelsDevCatalog,
   type Provider, type RoutingMap, type FamilyKey, type Target,
 } from '@wisp/core';
 import { useTerminalDimensions } from '@opentui/react';
-import { ArtRows, flightWidth } from './flight';
-import { routeArt } from './flightArt';
+import { Lantern, flightWidth } from './flight';
 import { home } from './store';
+import { pickerProviders } from './providerScreens';
 import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
+import { latestClaudeFamilies, type ClaudeFamilyModels } from './claudeFamilyModels';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
 import { commandFrameFits, useTuiInk } from './theme';
 import { ChoiceList, Panel, wrapWords, WrapSelect, type WrapOption, onSubmitText, useInputColors } from './widgets';
@@ -48,23 +49,9 @@ const rowTarget = (map: RoutingMap, row: RouteRow): Target | undefined =>
 // (#79). Origin is derivable (family rows → Claude Code section, alias screens → Custom).
 export const sectionOf = (row: RouteRow): RoutingSection => row.kind === 'family' ? 'families' : row.kind === 'codex-model' ? 'codex' : 'aliases';
 
-// The one-tap "bind Claude subscription models" mapping: each Family route's natural Claude.ai
-// model. TUI-local data — promote to core if the side panel ever grows the same button.
-// STALE-BY-DESIGN: a hardcoded table the live picker cannot correct, so a new Claude release makes the
-// one-tap bind a silent DOWNGRADE (it overwrote fable with claude-fable-5 after claude-fable-5-1 shipped
-// 2026-09-01). Re-check alongside CLAUDE_CODE_VERSION whenever a family gains a release — those two pins
-// go stale on the same event.
-export const CLAUDE_FAMILY_MODELS: Record<FamilyKey, string> = {
-  opus: 'claude-opus-5',
-  sonnet: 'claude-sonnet-5',
-  haiku: 'claude-haiku-4-5',
-  fable: 'claude-fable-5-1',
-};
-
 // ----------------------------------------- Screens ----------------------------------------- //
 
 // The /routing overview — two sections: Claude Code's Family routes, and the named Aliases.
-const traces = [routeArt(0), routeArt(1), routeArt(2)];
 export const RoutingScreen = ({ cols, onPick }: {
   cols: number;
   onPick: (section: RoutingSection) => void;
@@ -79,7 +66,7 @@ export const RoutingScreen = ({ cols, onPick }: {
   ];
   return <Panel title="Routing map">
     <box flexDirection="row" alignItems="center">
-      {illustrated && <box width={21} marginRight={2}><ArtRows rows={traces[selected]} /></box>}
+      {illustrated && <box width={21} marginRight={2}><Lantern scene={selected} /></box>}
       <box flexGrow={1}>
         <ChoiceList height={6} options={sections} selectedIndex={selected}
           onChange={setSelected} onSelect={index => onPick(sections[index].value)} />
@@ -99,10 +86,22 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
   section: RoutingSection;
   cols: number;
   onAddAlias: () => void;
-  onBind: () => void;
+  onBind: (models: ClaudeFamilyModels) => void;
   onPickRow: (row: RouteRow) => void;
 }) => {
   const ink = useTuiInk();
+  const [attempt, setAttempt] = useState(0);
+  // undefined while checking; null after an unavailable or incomplete response.
+  const [published, setPublished] = useState<ClaudeFamilyModels | null>();
+  useEffect(() => {
+    if (section !== 'families') return;
+    let visible = true;
+    setPublished(undefined);
+    void getModelsDevCatalog(undefined, attempt > 0).then(result => {
+      if (visible) setPublished(latestClaudeFamilies(result) ?? null);
+    });
+    return () => { visible = false; };
+  }, [section, attempt]);
   const [catalog, setCatalog] = useState<CodexRoutingCatalog>({ models: [], error: 'Discovering native Codex models…' });
   useEffect(() => {
     if (section !== 'codex') return;
@@ -135,8 +134,12 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
       ? map.aliases.map(alias => option(alias.name, destination(alias.target), 'alias:' + alias.name))
       : codexRoutingRows(map, catalog).map(row => option(row.name === row.id ? row.id : row.name + ' · ' + row.id,
           row.description, 'codex-model:' + row.id));
-  if (section === 'families') routes.push({ group: 'Actions', name: 'Bind Claude subscription models',
-    description: '  Route all four families to Anthropic (Claude.ai).', value: ' bind' });
+  if (section === 'families') routes.push({
+    group: 'Actions', name: published === null ? 'Retry Claude model lookup' : 'Bind Claude subscription models',
+    description: published ? 'Published · ' + FAMILY_KEYS.map(f => published[f]).join(' · ')
+      : published === null ? 'Full family list unavailable. Existing routes kept.' : 'Checking models.dev…',
+    value: ' bind',
+  });
   if (section === 'aliases') routes.push({ group: 'Actions', name: 'Add alias', description: '', value: 'add' });
   return <Panel title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'}>
     {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={ink.note}>{line}</text>)}
@@ -148,7 +151,11 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
       onSelect={(_i, opt) => {
         const v = opt.value;
         if (v === 'add') { onAddAlias(); return; }
-        if (v === ' bind') { onBind(); return; }
+        if (v === ' bind') {
+          if (published) onBind(published);
+          else if (published === null) setAttempt(n => n + 1);
+          return;
+        }
         const key = v.slice(v.indexOf(':') + 1);
         onPickRow(v.startsWith('family:') ? { kind: 'family', family: key as FamilyKey } : { kind: v.startsWith('codex-model:') ? 'codex-model' : 'alias', name: key });
       }}
@@ -208,12 +215,29 @@ export const AliasRenameScreen = ({ name, onBack, onStatus }: {
   </Panel>
 );
 
-// Pick a row's Provider — alias rows lead with the rename/remove verbs.
-export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
+export const AliasActionsScreen = ({ name, cols, onChangeProvider, onRename, onRemove }: {
+  name: string; cols: number; onChangeProvider: () => void; onRename: () => void; onRemove: () => void;
+}) => {
+  const row = { kind: 'alias', name } as const;
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row));
+  return <Panel title={`Alias actions — ${name}`}>
+    {trace.view}
+    <WrapSelect cols={cols} maxRows={Math.min(12, trace.pickerRows - 2)} options={[
+      { name: 'Change provider', description: 'choose the provider and model for this alias', value: 'provider' },
+      { name: 'Rename alias', description: 'keep the Target, change the bridged name', value: 'rename' },
+      { name: 'Remove alias', description: 'delete this bridged name', value: 'remove' },
+    ]} onSelect={(_i, opt) => {
+      if (opt.value === 'provider') onChangeProvider();
+      if (opt.value === 'rename') onRename();
+      if (opt.value === 'remove') onRemove();
+    }} />
+  </Panel>;
+};
+
+export const RouteProviderScreen = ({ row, cols, onClear, onPick }: {
   row: RouteRow;
   cols: number;
   onClear: () => void;
-  onRename: (name: string) => void;
   onPick: (p: Provider) => void;
 }) => {
   const trace = useRouteTrace(row, rowTarget(routingMap(), row));
@@ -223,17 +247,7 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
       cols={cols}
       maxRows={Math.min(12, trace.pickerRows - 2)} // WrapSelect can show a “more” row at each end.
       options={[
-        // Alias rows lead with the edit verbs (#79) — no scrolling past every Provider to
-        // rename. Only for aliases already IN the map: the add-alias flow passes through here
-        // before its row is persisted, and rename/remove on a nonexistent alias dead-ends.
-        // Leading-space values can't collide with Provider ids (ids never start with a space).
-        ...(row.kind === 'alias' && routingMap().aliases.some((a) => a.name === (row as { name: string }).name)
-          ? [
-              { name: 'Rename alias', description: 'keep the Target, change the bridged name', value: ' rename' },
-              { name: 'Remove alias', description: 'delete this bridged name', value: ' clear' },
-            ]
-          : []),
-        ...PROVIDERS.map((p) => ({ name: p.label, description: p.id, value: p.id })),
+        ...pickerProviders.map(p => ({ name: p.label, description: p.id, value: p.id })),
         // A Family route is cleared, never renamed — its picker keeps clear at the bottom.
         ...(row.kind !== 'alias'
           ? [{ name: 'Clear route', description: row.kind === 'family' ? 'family falls back to the Active Provider' : 'remove this binding; Alias precedence still applies', value: ' clear' }]
@@ -241,7 +255,6 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
       ]}
       onSelect={(_i, opt) => {
         if (opt.value === ' clear') { onClear(); return; }
-        if (opt.value === ' rename' && row.kind === 'alias') { onRename(row.name); return; }
         const p = PROVIDERS.find((x) => x.id === opt.value);
         if (p) onPick(p);
       }}
@@ -285,7 +298,7 @@ const useRouteTrace = (row: RouteRow, assigned?: Target, proposed?: Target) => {
     <box width={wide ? sourceCols : '100%'} justifyContent="center">
       {sourceLines.map((part, i) => <text key={i} fg={ink.heading}><strong>{part}</strong></text>)}
     </box>
-    {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 2 : 0]} /></box>}
+    {wide && <box width={21} height={8}><Lantern scene={changed ? 2 : 0} /></box>}
     <box flexGrow={1} justifyContent={wide ? 'space-between' : 'flex-start'} paddingY={wide ? 1 : 0}>
       <box>{assignedLines}</box>
       {proposed && <box>{proposedLines}</box>}

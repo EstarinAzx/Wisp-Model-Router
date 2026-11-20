@@ -37,6 +37,7 @@ import type { TestRendererSetup } from '@opentui/core/testing';
 // Env keys leak real machine state into keyStatus rows — scrub every catalog env var.
 let exitCode = 0;
 let destroy = () => {};
+process.env.WISP_REDUCED_MOTION = '1'; // Capture the still frame for byte-for-byte comparisons.
 try {
 for (const p of PROVIDERS) if (p.apiKeyEnv) delete process.env[p.apiKeyEnv];
 
@@ -66,6 +67,11 @@ const SSE_REPLY = 'data: {"choices":[{"delta":{"content":"Stub reply."}}]}\n\nda
 
 globalThis.fetch = (async (input: unknown) => {
   const url = String(input instanceof Request ? input.url : input);
+  if (url === 'https://models.dev/api.json') {
+    const models = Object.fromEntries(['opus', 'sonnet', 'haiku', 'fable'].map(family =>
+      [`claude-${family}-9-1`, { release_date: '2025-02-01' }]));
+    return Response.json({ anthropic: { models } });
+  }
   if (url.endsWith('/models')) {
     if (holdModels) await holdModels;
     return Response.json({ data: stubModels });
@@ -213,24 +219,36 @@ await press(() => mockInput.pressBackspace(), 'backspace');
 
 // /providers list + both menu payload kinds (keyed row with stored key, OAuth row signed in)
 await run('/providers');
-await see('(active)', 'providers');
+await see('Custom', 'providers');
 await reactAct(async () => setup.resize(80, 24));
-await waitForFrame(f => f.includes('OpenCode Go (active)') && f.includes('Esc back') && f.includes('╯'));
+await waitForFrame(f => f.includes('Custom') && f.includes('Esc back') && f.includes('╯'));
 await reactAct(async () => setup.resize(80, 8));
 const compactProviders = await waitForFrame(f => f.split('\n')[0].length === 80 && f.includes('Providers'));
-assert(compactProviders.includes('OpenCode Go (active)'), 'the selected provider must fit in a one-row picker');
+assert(compactProviders.includes('Custom'), 'the selected provider must fit in a one-row picker');
 assert(compactProviders.includes('Esc back') && compactProviders.includes('q quit'), 'the picker controls must fit below the selected provider');
 await arrow('down');
-await waitForFrame(f => f.includes('OpenCode Zen'));
+await waitForFrame(f => f.includes('Anthropic'));
 await arrow('up');
+await reactAct(async () => setup.resize(42, 12));
+const narrowPicker = await waitForFrame(f => f.includes('Custom') && f.includes('q quit'));
+assert(narrowPicker.includes('Esc back'), 'narrow picker footer keeps the back and quit keys separate');
 await reactAct(async () => setup.resize(100, 40));
+// Navigate by visible name so catalog additions keep exercising the same provider.
+const highlightRow = async (label: string) => {
+  for (let n = 0; n <= PROVIDERS.length + 2; n++) {
+    if (selectionBand().includes(label)) return;
+    await arrow('down');
+  }
+  throw new Error('Could not highlight ' + label);
+};
+await highlightRow('OpenCode Go (active)');
 await waitForFrame(f => f.includes('opencode-go — key set'));
 
 await enter();
 await see('Use as Active Provider', 'provider-menu-keyed');
 await esc();
-await see('(active)', 'providers-return');
-for (let i = 0; i < 3; i++) await arrow('down');
+await see('Custom', 'providers-return');
+await highlightRow('Anthropic');
 await enter();
 await see('browser flow', 'provider-menu-oauth');
 await esc();
@@ -285,9 +303,11 @@ await arrow('down');
 assert(selectionBand().includes('Codex'));
 await arrow('up');
 await enter();
-await see('Bind Claude subscription models', 'routing-families');
+await see('claude-opus-9-1', 'routing-families');
 const familyTable = setup.captureCharFrame();
 assert(familyTable.split('\n').some(line => line.includes('opus') && line.includes('opencode-go / minimax-m3')));
+const actionRow = familyTable.split('\n').findIndex(line => line.includes('── Actions'));
+assert.equal(familyTable.split('\n')[actionRow - 1].replace(/│/g, '').trim(), '', 'one blank row above Actions');
 assert(familyTable.indexOf('Actions') > familyTable.indexOf('fable'));
 assert(familyTable.indexOf('Actions') < familyTable.indexOf('Bind Claude subscription models'));
 await enter();
@@ -298,6 +318,7 @@ const providerEnd = await waitForFrame(f => f.includes('Clear route'));
 assert(providerEnd.includes('Enter choose') && providerEnd.includes('q quit'), 'provider picker footer must fit below the last action');
 await arrow('down');
 await reactAct(async () => setup.resize(100, 40));
+await highlightRow('OpenCode Go');
 gateModels();
 await enter();
 await see('Fetching models', 'route-model-loading');
@@ -312,11 +333,12 @@ await see('stub-model-a', 'route-revise');
 await enter();
 await waitForFrame(f => f.includes('Apply this route?'));
 await enter();
-await see('Bind Claude subscription models', 'route-applied');
+await see('claude-opus-9-1', 'route-applied');
 assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
 stubModels.push(...Array.from({ length: 24 }, (_, i) => ({ id: `stub-model-extra-${i}` })));
 stubModels.unshift({ id: 'a-long-model-' + 'x'.repeat(60) });
 await enter();
+await highlightRow('OpenCode Go');
 gateModels();
 await enter();
 await waitForFrame(f => f.includes('Fetching models'));
@@ -333,8 +355,7 @@ await reactAct(async () => setup.resize(100, 40));
 await esc();
 await enter();
 await see('Route opus via', 'route-provider-family-again');
-await arrow('up'); // wraps to Clear route
-await arrow('up'); // Custom
+await highlightRow('Custom');
 await enter();
 await see('no live list', 'route-model-free');
 await esc();
@@ -356,7 +377,18 @@ await reactAct(async () => setup.resize(39, 24));
 await waitForFrame(f => f.includes('↳ opencode-go / minimax-m3') && f.includes('Add alias'));
 await reactAct(async () => setup.resize(100, 40));
 await enter();
-await see('Rename alias', 'route-provider-alias');
+await see('Rename alias', 'alias-actions');
+const actions = setup.captureCharFrame();
+assert(actions.includes('Change provider') && actions.includes('Remove alias'));
+assert(!actions.includes('Custom'), 'provider choices belong in the submenu');
+await highlightRow('Change provider');
+await enter();
+await see('Custom', 'route-provider-alias');
+assert(!setup.captureCharFrame().includes('Rename alias'));
+assert(selectionBand().includes('Custom'), 'the submenu starts on the first provider');
+await esc();
+await waitForFrame(f => f.includes('Rename alias'));
+await highlightRow('Rename alias');
 await enter();
 await see('Rename alias fast', 'alias-rename');
 await esc();
@@ -364,7 +396,30 @@ await see('Add alias', 'routing-aliases-back');
 await arrow('down');
 await enter();
 await see('New alias name', 'alias-name');
+await reactAct(async () => { await mockInput.typeText('new-route'); });
+await enter();
+const newProvider = await waitForFrame(f => f.includes('Route new-route via...') && f.includes('Custom'));
+assert(!newProvider.includes('Alias actions'), 'new aliases go directly to providers');
 await esc();
+await waitForFrame(f => f.includes('Add alias'));
+await esc();
+await esc();
+
+// /guide is readable before setup and returns to the command input.
+await run('/guide');
+await see('Wisp guide', 'guide-index');
+await enter();
+await see('Your first route', 'guide-first-route');
+assert.equal(inkOf('Pick a provider'), '241,237,243', 'guide prose uses the neutral reading color');
+assert.equal(inkOf('/providers'), '207,176,250', 'commands stand out in guide prose');
+await esc();
+await waitForFrame(f => f.includes('Wisp guide'));
+await highlightRow('Command reference');
+await enter();
+await waitForFrame(f => f.includes('Run slash commands'));
+assert.equal(inkOf('/key'), '207,176,250');
+assert.equal(inkOf('[provider]'), '176,171,182', 'argument hints are quieter than commands');
+assert.equal(inkOf('List the Provider catalog'), '241,237,243');
 await esc();
 await esc();
 
@@ -423,6 +478,20 @@ const routeLines = wrappedAlias.split('\n');
 const aliasLine = routeLines.findIndex(line => line.includes('abcdefghijklmno'));
 assert(aliasLine >= 0 && routeLines[aliasLine].includes('opencode-go'), 'align destination with the first alias line');
 assert(routeLines[aliasLine + 1].includes('pqrst'), 'keep the rest of the alias on its own physical line');
+
+// Visiting the family tracker only reads. Enter on Bind applies the four displayed targets together.
+await esc(); await esc();
+await reactAct(async () => setup.resize(100, 40));
+await run('/routing'); await enter();
+await waitForFrame(f => f.includes('claude-opus-9-1'));
+assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
+const aliasesBeforeBind = store.home.readConfig().routing?.aliases;
+await highlightRow('Bind Claude subscription models');
+await enter();
+await waitForFrame(f => f.includes('Families →'));
+for (const family of ['opus', 'sonnet', 'haiku', 'fable'] as const)
+  assert.deepEqual(store.home.readConfig().routing?.families[family], { providerId: 'anthropic', model: `claude-${family}-9-1` });
+assert.deepEqual(store.home.readConfig().routing?.aliases, aliasesBeforeBind);
 
 // ----------------------------------------- Baseline write / diff ----------------------------------------- //
 

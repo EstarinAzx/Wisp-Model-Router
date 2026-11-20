@@ -4,6 +4,16 @@ All notable changes to **Wisp** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.14] - 2026-11-20
+
+### Changed
+
+- Updates the shared Claude Code User-Agent and request-body version stamp to 2.1.329 and includes the shared catalog updates.
+
+### Surfaces
+
+- **Companion VSIX 1.14.14** ships with **terminal/npm 2.3.1**. The slot plugin stays at **1.7.6** and the Desktop protocol at **5**. [Release notes](../../docs/releases/v2.3.1.md)
+
 ## [1.14.13] - 2026-11-20
 
 ### Changed

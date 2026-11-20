@@ -10,16 +10,20 @@ import { ChoiceList, Panel, wrapWords } from './widgets';
 import { sessionLabel, sessionDetail } from './bridgeLog';
 
 // Shared command output: hand-wrap before scrolling so narrow terminals retain every line.
-export const InfoScreen = ({ title, lines, cols, maxRows, pending }: { title: string; lines: string[]; cols: number; maxRows: number; pending?: boolean }) => {
+export const InfoScreen = ({ title, lines, cols, maxRows, pending, escLabel, wrapParagraph = wrapWords }: {
+  title: string; lines: string[]; cols: number; maxRows: number; pending?: boolean; escLabel?: string;
+  wrapParagraph?: (paragraph: string, width: number) => ReactNode[];
+}) => {
   const ink = useTuiInk();
   // Leave room for the native scrollbar.
-  const wrapped = lines.flatMap((line, i) => [...(i ? [''] : []), ...wrapWords(line, Math.max(cols - 1, 1))]);
+  const wrapped = lines.flatMap((line, i) => [...(i ? [''] : []), ...wrapParagraph(line, Math.max(cols - 1, 1))]);
   return (
     <Panel title={title}>
-      <scrollbox focused scrollY height={Math.min(wrapped.length, Math.max(maxRows, 1))}>
+      <scrollbox focused scrollY height={Math.min(wrapped.length, Math.max(maxRows, 1))}
+          scrollbarOptions={{ showArrows: false, trackOptions: { backgroundColor: 'transparent', foregroundColor: ink.note } }}>
         {wrapped.map((line, i) => <text fg={pending ? ink.live : ink.value} key={i} wrapMode="none" height={1} flexShrink={0}>{line}</text>)}
       </scrollbox>
-      <text wrapMode="none" fg={ink.note} marginTop={1}>↑/↓ scroll · Esc {pending ? 'cancels' : 'closes'}</text>
+      <text wrapMode="none" fg={ink.note} marginTop={1}>↑/↓ scroll · Esc {escLabel ?? (pending ? 'cancels' : 'closes')}</text>
     </Panel>
   );
 };

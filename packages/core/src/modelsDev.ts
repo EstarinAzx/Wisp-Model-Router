@@ -55,9 +55,9 @@ const fetchCatalog = async (signal?: AbortSignal): Promise<ModelsDevCatalog | un
 
 // The cached catalog, refetching only past the TTL. Concurrent callers share one in-flight request, so
 // VS Code's frequent provideLanguageModelChatInformation calls never fan out duplicate GETs.
-export const getModelsDevCatalog = async (signal?: AbortSignal): Promise<ModelsDevCatalog | undefined> => {
+export const getModelsDevCatalog = async (signal?: AbortSignal, refresh = false): Promise<ModelsDevCatalog | undefined> => {
   if (signal?.aborted) return undefined;
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.catalog;
+  if (!refresh && cache && Date.now() - cache.at < TTL_MS) return cache.catalog;
   if (!inflight) {
     inflight = fetchCatalog(signal).then((catalog) => {
       if (catalog) cache = { at: Date.now(), catalog };
