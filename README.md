@@ -58,7 +58,7 @@ In another terminal, start Claude Code with the alias you created (here, `grok`)
 claude-wisp --model grok
 ```
 
-Use `claude-wisp --model <alias>` to choose a starting alias, then switch with Claude Code's `/model` picker. Normal mode uses Claude's context estimates. Add `--exact-context` to apply one target's budget and pin that session; see [context budgets and switching](docs/claude-wisp.md).
+Use `claude-wisp --model <alias>` to choose a starting alias, then switch with Claude Code's `/model` picker. Normal mode uses Claude's context estimates, which can compact early or exceed a smaller backend's limit. Add `--exact-context` to apply one target's budget and pin that session; see [context budgets and switching](docs/claude-wisp.md).
 
 Prefer VS Code? [Install the extension](#vs-code-extension) and use your models directly in its chat and agent views. For Desktop, see the [experimental bridge setup](#chatgpt-desktop-codex-bridge--experimental) below.
 
@@ -159,7 +159,7 @@ Native models keep their capabilities and ChatGPT sign-in. Voice uses your exist
 <details>
 <summary><strong>Try the Desktop bridge</strong></summary>
 
-Use terminal **2.3.1** with a matching Bridge, or companion VSIX **1.14.14** when VS Code hosts it. You'll also need an independently installed native Codex CLI. Read the [Desktop setup and rollback guide](docs/codex-desktop.md) first, especially if you already have custom Codex configuration or other clients sharing `CODEX_HOME`.
+Use terminal **2.3.2** with a matching Bridge, or companion VSIX **1.14.15** when VS Code hosts it. You'll also need an independently installed native Codex CLI. Read the [Desktop setup and rollback guide](docs/codex-desktop.md) first, especially if you already have custom Codex configuration or other clients sharing `CODEX_HOME`.
 
 With the Bridge running, use **`/gpt-desktop on`** in Wisp and restart Desktop. To turn routing off, use **`/gpt-desktop off`** and restart Desktop again. Neither command starts or stops the Bridge. Use fresh chats when switching to external models.
 

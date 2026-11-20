@@ -4,6 +4,16 @@ All notable changes to **Wisp** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.15] - 2026-11-20
+
+### Changed
+
+- Update the shared Bridge's exact-context refusal message to include the required `--exact-context` relaunch option. Document normal alias switching and opt-in exact budgets.
+
+### Surfaces
+
+- **Companion VSIX 1.14.15** ships with **terminal/npm 2.3.2**, where the restored Claude alias picker lives. Native Copilot behavior, slot **1.7.6**, Desktop protocol **5** and Claude Code request stamp **2.1.329** are unchanged. [Release notes](../../docs/releases/v2.3.2.md)
+
 ## [1.14.14] - 2026-11-20
 
 ### Changed
