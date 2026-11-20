@@ -36,10 +36,11 @@ import {
 } from '@wisp/core';
 import { fetchEffortOptions } from './modelFetch';
 import { home, activeProvider, codexAuth, anthropicAuth, xaiAuth, kimiAuth, antigravityAuth, quotaCurrent } from './store';
-import { createTuiBridge, ensureBridgeSecret, bridgeAddress, bridgePort } from './bridge';
+import { detectExternalBridge } from './bridgePresence';
+import { createTuiBridge, ensureBridgeSecret, bridgePort } from './bridge';
 import type { Mode, RouteRow, RoutingSection } from './modes';
 import { logBackMode } from './modes';
-import { ACCENT, FOREGROUND, RULE, bridgeInk, commandFrameFits } from './theme';
+import { ACCENT, RULE, tuiInk, TuiInkContext, commandFrameFits } from './theme';
 import { Flight, flightWidth } from './flight';
 import { wrapWords } from './widgets';
 import {
@@ -127,7 +128,29 @@ export const App = () => {
     update();
     return () => { renderer.off('theme_mode', update); };
   }, [renderer]);
-  const bridgeColors = lightTerminal ? bridgeInk.light : bridgeInk.dark;
+  const ink = lightTerminal ? tuiInk.light : tuiInk.dark;
+  const [localPort, setLocalPort] = useState(bridge.listeningPort);
+  const [externalPort, setExternalPort] = useState<number>();
+  useEffect(() => {
+    setExternalPort(undefined);
+    if (localPort !== undefined) return;
+    const cancel = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      let port: number | undefined;
+      try {
+        const configured = bridgePort();
+        if (await detectExternalBridge(configured, cancel.signal)) port = configured;
+      } catch { /* A missing or unreadable configuration cannot identify a listener. */ }
+      if (cancel.signal.aborted) return;
+      setExternalPort(port);
+      timer = setTimeout(check, 3000);
+    };
+    void check();
+    return () => { cancel.abort(); clearTimeout(timer); };
+  }, [localPort]);
+  const livePort = localPort ?? externalPort;
+  const listenerLabel = livePort === undefined ? 'Bridge idle' : 'Bridge up :' + livePort;
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
   const isHome = mode.kind === 'input' && line === '';
   const framed = !isHome && commandFrameFits(termWidth, termHeight);
@@ -439,22 +462,32 @@ export const App = () => {
         const arg = target.args[0]?.toLowerCase();
         if (arg && arg !== 'off') { setStatus('/bridge takes off (or no argument)'); return; }
         if (arg === 'off') {
-          if (!bridge.isRunning()) { setStatus('Bridge is not running.'); return; }
-          bridge.stop(); setStatus('Bridge stopped.'); return;
+          if (!bridge.isRunning()) {
+            setStatus(externalPort === undefined ? 'Bridge is not running.' : 'Another Wisp host owns this listener. Stop it in that host.');
+            return;
+          }
+          bridge.stop(); setLocalPort(undefined); setStatus('Bridge stopped.'); return;
         }
         if (bridge.isRunning()) {
           // already up → re-show the Screen only; the listener is never touched
-          setMode({ kind: 'bridge', address: bridgeAddress(), secret: ensureBridgeSecret() });
+          setMode({ kind: 'bridge', address: 'http://127.0.0.1:' + bridge.listeningPort(), secret: ensureBridgeSecret() });
           return;
         }
         // isRunning() stays false until the bind lands, so without this guard a double /bridge would
         // race a second server onto the same port and orphan the first one's handle.
+        if (externalPort !== undefined) {
+          setMode({ kind: 'info', title: 'Bridge', lines: ['Bridge up :' + externalPort, 'Another Wisp host owns this listener. Manage it in that host.'] });
+          return;
+        }
         if (bridgeStarting.current) { setStatus('Bridge is starting…'); return; }
         bridgeStarting.current = true;
         bridge.start().then(
           () => {
             bridgeStarting.current = false;
-            const info = { kind: 'bridge' as const, address: bridgeAddress(), secret: ensureBridgeSecret() };
+            const port = bridge.listeningPort();
+            setLocalPort(port);
+            if (port === undefined) return;
+            const info = { kind: 'bridge' as const, address: 'http://127.0.0.1:' + port, secret: ensureBridgeSecret() };
             // Show the info screen only if the user is still on the palette (a slow bind must not yank a
             // screen they navigated to) — the status line announces the start wherever they are.
             setMode((m) => m.kind === 'input' ? info : m);
@@ -601,6 +634,7 @@ export const App = () => {
   });
 
   return (
+    <TuiInkContext.Provider value={ink}>
     <box width="100%" height="100%" alignItems="center" justifyContent="center">
       <box width={panelCols + (framed ? 4 : 0)} maxWidth="100%" maxHeight="100%"
         border={framed ? true : []} borderStyle="rounded" borderColor={RULE} paddingX={framed ? 1 : 0}>
@@ -608,10 +642,10 @@ export const App = () => {
         <Flight width={panelCols} height={artHeight} />
       </box> : <box flexDirection="row" justifyContent="space-between" flexShrink={0}
         border={framed ? ['bottom'] : []} borderColor={RULE} marginBottom={0}>
-        <text fg={FOREGROUND}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
-        <text fg={mode.kind === 'bridge' ? bridgeColors.live : FOREGROUND}>{bridge.isRunning() && <span fg={mode.kind === 'bridge' ? bridgeColors.live : ACCENT}>● </span>}{bridge.isRunning() ? `Bridge up :${bridgePort()}` : `v${pkg.version}`}</text>
+        <text fg={ink.heading}><strong>Wisp<span fg={ACCENT}>_</span></strong></text>
+        <text fg={livePort !== undefined ? ink.live : ink.note}>{livePort !== undefined ? '● ' + listenerLabel : 'v' + pkg.version}</text>
       </box>}
-      {mode.kind === 'input' && !isHome && <text fg={FOREGROUND} marginY={1}><strong>Commands</strong>{suggestions.length > 5 && <span>  {highlight + 1}/{suggestions.length}</span>}</text>}
+      {mode.kind === 'input' && !isHome && <text fg={ink.heading} marginY={1}><strong>Commands</strong>{suggestions.length > 5 && <span>  {highlight + 1}/{suggestions.length}</span>}</text>}
 
       {mode.kind === 'input' && (
         <PaletteScreen
@@ -665,7 +699,7 @@ export const App = () => {
         <TestScreen provider={mode.provider} model={mode.model} text={mode.text} phase={mode.phase} error={mode.error} />
       )}
 
-      {mode.kind === 'bridge' && <BridgeScreen ink={bridgeColors} address={mode.address} secret={mode.secret} cols={panelCols} />}
+      {mode.kind === 'bridge' && <BridgeScreen ink={ink} address={mode.address} secret={mode.secret} cols={panelCols} />}
 
       {mode.kind === 'logs' && <SessionListScreen onSelect={id => setMode({ kind: 'log', id })} />}
       {mode.kind === 'log' && <LogScreen id={mode.id} cols={panelCols} />}
@@ -742,23 +776,24 @@ export const App = () => {
       {mode.kind === 'effort-pick' && <EffortPickScreen onDone={backToInput} options={mode.options} current={mode.current} />}
 
       {mode.kind === 'input' && /^\/[^\s]*$/.test(line) && !suggestions.length &&
-        <text fg={FOREGROUND} marginTop={1}>No matching commands. Backspace to edit.</text>}
+        <text fg={ink.note} marginTop={1}>No matching commands. Backspace to edit.</text>}
       {mode.kind === 'input' && <box marginTop={1} flexDirection="row" justifyContent="space-between" flexShrink={0}>
         {isHome ? <>
-          <text fg={FOREGROUND} wrapMode="none">{`v${pkg.version} · ${bridge.isRunning() ? 'Bridge up :' + bridgePort() : 'Bridge idle'}`}</text>
-          <text fg={FOREGROUND}>q quit</text>
-        </> : <text fg={FOREGROUND} wrapMode="none">{panelCols >= 48
+          <text fg={ink.note} wrapMode="none">{'v' + pkg.version + ' · '}<span fg={livePort !== undefined ? ink.live : ink.note}>{listenerLabel}</span></text>
+          <text fg={ink.note}>q quit</text>
+        </> : <text fg={ink.note} wrapMode="none">{panelCols >= 48
           ? '↑↓ select · Tab complete · Enter open · Esc back'
           : '↑↓ select · Tab · Enter · Esc'}</text>}
       </box>}
       {isPicker && <box border={['top']} borderColor={RULE} marginTop={1} flexDirection="row" justifyContent="space-between">
-        <text fg={FOREGROUND} wrapMode="none">↑↓ select   Enter choose   Esc back</text>
-        <text fg={FOREGROUND}>q quit</text>
+        <text fg={ink.note} wrapMode="none">↑↓ select   Enter choose   Esc back</text>
+        <text fg={ink.note}>q quit</text>
       </box>}
       {feedback.length > 0 && <box marginTop={1} flexShrink={0}>
-        {feedback.map((l, i) => <text key={i} wrapMode="none" fg={FOREGROUND}>{l}</text>)}
+        {feedback.map((l, i) => <text key={i} wrapMode="none" fg={ink.heading}>{l}</text>)}
       </box>}
       </box>
     </box>
+    </TuiInkContext.Provider>
   );
 };

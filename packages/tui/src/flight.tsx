@@ -1,7 +1,7 @@
 // Flight's responsive wordmark and Lantern use the approved terminal-cell artwork.
 import { useMemo } from 'react';
 import { baseNameWidth, colors, homeArt, lanternWidth, wordmark, type Run } from './flightArt';
-import { FOREGROUND } from './theme';
+import { FOREGROUND, useTuiInk } from './theme';
 
 export const flightWidth = (columns: number) =>
   Math.max(1, columns - 2 * Math.max(2, Math.min(8, Math.round(columns * .04))));
@@ -15,6 +15,7 @@ export const ArtRows = ({ rows }: { rows: Run[][] }) => rows.map((runs, row) => 
 const letters = wordmark(baseNameWidth);
 
 export const Flight = ({ width, height }: { width: number; height: number }) => {
+  const ink = useTuiInk();
   const flying = width >= 74 && height >= 21;
   // Keep the mark and wake at the approved 80-column window size.
   const rows = useMemo(() => homeArt(flying ? 74 : lanternWidth, 1, baseNameWidth, flying), [flying]);
@@ -30,6 +31,6 @@ export const Flight = ({ width, height }: { width: number; height: number }) => 
       {width >= lanternWidth && height >= 23 && <box width={lanternWidth} height={10}><ArtRows rows={rows} /></box>}
       {brand}
     </>}
-    <text height={1} fg={FOREGROUND}>BYOK model router</text>
+    <text height={1} fg={ink.note}>BYOK model router</text>
   </box>;
 };

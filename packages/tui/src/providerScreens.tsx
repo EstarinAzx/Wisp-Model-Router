@@ -29,8 +29,8 @@ import {
   type Provider, type EffortLevel,
 } from '@wisp/core';
 import { home, activeProvider } from './store';
-import { FOREGROUND, INPUT_COLORS } from './theme';
-import { ChoiceList, Panel, onSubmitText } from './widgets';
+import { useTuiInk } from './theme';
+import { ChoiceList, Panel, onSubmitText, useInputColors } from './widgets';
 
 // ----------------------------------------- Key + model storage ----------------------------------------- //
 
@@ -193,17 +193,19 @@ export const KeyPickScreen = ({ onPick }: { onPick: (p: Provider) => void }) => 
 );
 
 // Masked key entry — the shell's global keyboard handler feeds `secret`; only bullets render.
-export const KeyEntryScreen = ({ provider, secret }: { provider: Provider; secret: string }) => (
-  <Panel title={`API key — ${provider.label}`}>
-    {isGeminiApiProvider(provider) && <text fg={FOREGROUND}>Separate Gemini API credentials and billing. Saving starts a new credential lifetime.</text>}
-    <text fg={FOREGROUND} wrapMode="none">{secret ? '•'.repeat(secret.length) : ''}<span fg={FOREGROUND}>{secret ? '' : 'Paste or type, Enter to save, Esc to cancel'}</span></text>
-  </Panel>
-);
+export const KeyEntryScreen = ({ provider, secret }: { provider: Provider; secret: string }) => {
+  const ink = useTuiInk();
+  return <Panel title={`API key — ${provider.label}`}>
+    {isGeminiApiProvider(provider) && <text fg={ink.note}>Separate Gemini API credentials and billing. Saving starts a new credential lifetime.</text>}
+    <text fg={secret ? ink.value : ink.note} wrapMode="none">{secret ? '•'.repeat(secret.length) : 'Paste or type, Enter to save, Esc to cancel'}</text>
+  </Panel>;
+};
 
 // The /model fetch's parking line — the shell starter resolves it to pick or free entry.
-export const ModelLoadingScreen = ({ provider }: { provider: Provider }) => (
-  <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>Fetching models for {provider.label}…</text>
-);
+export const ModelLoadingScreen = ({ provider }: { provider: Provider }) => {
+  const ink = useTuiInk();
+  return <text wrapMode="none" flexShrink={0} fg={ink.live} marginTop={1}>Fetching models for <span fg={ink.value}>{provider.label}</span>…</text>;
+};
 
 // Pick the Provider's remembered model from its curated/live list.
 export const ModelPickScreen = ({ provider, options, onDone, onManual, onRefresh }: {
@@ -238,9 +240,10 @@ export const ModelPickScreen = ({ provider, options, onDone, onManual, onRefresh
 export const ModelFreeScreen = ({ provider, onDone }: {
   provider: Provider;
   onDone: (message?: string) => void;
-}) => (
-  <Panel title={`Model — ${provider.label} (no live list — type an id)`}>
-    <input {...INPUT_COLORS}
+}) => {
+  const inputColors = useInputColors();
+  return <Panel title={`Model — ${provider.label} (no live list — type an id)`}>
+    <input {...inputColors}
       focused
       placeholder={provider.defaultModel || 'model id'}
       onSubmit={onSubmitText((value) => {
@@ -252,8 +255,8 @@ export const ModelFreeScreen = ({ provider, onDone }: {
         else onDone('Empty — model unchanged.');
       })}
     />
-  </Panel>
-);
+  </Panel>;
+};
 
 // /signin | /signout with no argument — pick which OAuth door.
 export const OauthPickScreen = ({ action, onSignIn, onSignOut }: {
@@ -277,20 +280,23 @@ export const OauthPickScreen = ({ action, onSignIn, onSignOut }: {
 // The sign-in wait line — Esc routing (cancel, menu-origin return) lives in the shell. A device flow (#170)
 // has something to SHOW rather than a browser to wait on: the URL to open and the code to type there. Until
 // the server issues them it reads as the plain waiting line, so the screen covers both legs.
-export const SigninWaitScreen = ({ provider, device }: { provider: Provider; device?: { verificationUri: string; verificationUriComplete?: string; userCode: string } }) =>
-  device ? (
+export const SigninWaitScreen = ({ provider, device }: { provider: Provider; device?: { verificationUri: string; verificationUriComplete?: string; userCode: string } }) => {
+  const ink = useTuiInk();
+  const cancel = <span fg={ink.note}>Esc to cancel.</span>;
+  return device ? (
     <Panel title={`${provider.label} sign-in`}>
-      <text fg={FOREGROUND} wrapMode="none" flexShrink={0}>Open: {device.verificationUriComplete ?? device.verificationUri}</text>
-      <text fg={FOREGROUND} wrapMode="none" flexShrink={0}>Code: {device.userCode}</text>
-      <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>Waiting for you to approve it there. Esc to cancel.</text>
+      <text fg={ink.note} wrapMode="none" flexShrink={0}>Open: <span fg={ink.value}>{device.verificationUriComplete ?? device.verificationUri}</span></text>
+      <text fg={ink.note} wrapMode="none" flexShrink={0}>Code: <span fg={ink.value}>{device.userCode}</span></text>
+      <text wrapMode="none" flexShrink={0} fg={ink.live} marginTop={1}>Waiting for you to approve it there. {cancel}</text>
     </Panel>
   ) : (
-    <text wrapMode="none" flexShrink={0} fg={FOREGROUND} marginTop={1}>
+    <text wrapMode="none" flexShrink={0} fg={ink.live} marginTop={1}>
       {isKimiProvider(provider)
-        ? `Asking ${provider.label} for a device code. Esc to cancel.`
-        : `Browser opened — finish the ${provider.label} sign-in there. Esc to cancel.`}
+        ? `Asking ${provider.label} for a device code. `
+        : `Browser opened — finish the ${provider.label} sign-in there. `}{cancel}
     </text>
   );
+};
 
 // Pick the stored reasoning effort — writes config here; navigation stays a callback.
 export const EffortPickScreen = ({ onDone, options, current }: { onDone: (message?: string) => void; options: string[]; current?: string }) => (

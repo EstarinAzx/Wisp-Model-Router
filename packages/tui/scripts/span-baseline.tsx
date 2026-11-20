@@ -109,6 +109,9 @@ const setup = await testRender(<App />, { width: 100, height: 40, kittyKeyboard:
 destroy = () => { reactAct(() => setup.renderer.destroy()); };
 const { mockInput, waitForFrame } = setup;
 
+const inkOf = (text: string) => setup.captureSpans().lines.flatMap(line => line.spans)
+  .find(span => span.text.includes(text))?.fg.toInts().slice(0, 3).join(',');
+
 const frames: Record<string, string[]> = {};
 const snap = (name: string) => {
   const frame = setup.captureSpans();
@@ -117,7 +120,7 @@ const snap = (name: string) => {
       assert.equal(span.bg.toInts().join(','), '62,45,82,255', name + ': only the selection may paint a background');
       continue;
     }
-    if (name.startsWith('bridge') && ['207,176,250', '241,237,243', '176,171,182', '132,203,163']
+    if (['207,176,250', '241,237,243', '176,171,182', '132,203,163']
       .includes(span.fg.toInts().slice(0, 3).join(','))) continue;
     if (/[a-z]/i.test(span.text)) assert.equal(span.fg.intent, 'default', `${name}: ${span.text}`);
   }
@@ -364,8 +367,6 @@ await see('/plugin marketplace', 'bridge-client-setup');
 const clientSetup = setup.captureCharFrame();
 const advisorKey = 'CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL=1';
 assert(clientSetup.includes('Launch Claude Code') && !clientSetup.includes(advisorKey), 'manual setup starts folded');
-const inkOf = (text: string) => setup.captureSpans().lines.flatMap(line => line.spans)
-  .find(span => span.text.includes(text))?.fg.toInts().slice(0, 3).join(',');
 assert.equal(inkOf('Launch Claude Code'), '241,237,243');
 assert.equal(inkOf('claude-wisp [args…]'), '207,176,250');
 assert.equal(inkOf('Enabled automatically'), '176,171,182');
@@ -380,6 +381,16 @@ await reactAct(async () => { await mockInput.typeText('s'); });
 await waitForFrame(f => f.includes('Access secret'));
 await reactAct(async () => { await mockInput.typeText('r'); });
 await waitForFrame(f => f.includes('span-baseline-secret'));
+await esc();
+await waitForFrame(f => f.includes('Type / for commands') && f.includes('Bridge up'));
+assert.equal(inkOf('Bridge up'), '132,203,163', 'the running listener must be green on home');
+snap('home-bridge-running');
+await run('/routing');
+await see('Routing map', 'routing-bridge-running');
+assert.equal(inkOf('Bridge up'), '132,203,163', 'the running listener must also be green on routing');
+await esc();
+await run('/bridge off');
+await waitForFrame(f => f.includes('Bridge idle') && !f.includes('Bridge up'));
 
 // ----------------------------------------- Baseline write / diff ----------------------------------------- //
 

@@ -5,20 +5,21 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { SLASH_COMMANDS, listLogSessions, readSessionLog, formatSessionLog } from '@wisp/core';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
-import { ACCENT, FOREGROUND, type bridgeInk } from './theme';
+import { ACCENT, FOREGROUND, useTuiInk, type tuiInk } from './theme';
 import { ChoiceList, Panel, wrapWords } from './widgets';
 import { sessionLabel, sessionDetail } from './bridgeLog';
 
 // Shared command output: hand-wrap before scrolling so narrow terminals retain every line.
 export const InfoScreen = ({ title, lines, cols, maxRows, pending }: { title: string; lines: string[]; cols: number; maxRows: number; pending?: boolean }) => {
+  const ink = useTuiInk();
   // Leave room for the native scrollbar.
   const wrapped = lines.flatMap((line, i) => [...(i ? [''] : []), ...wrapWords(line, Math.max(cols - 1, 1))]);
   return (
     <Panel title={title}>
       <scrollbox focused scrollY height={Math.min(wrapped.length, Math.max(maxRows, 1))}>
-        {wrapped.map((line, i) => <text fg={FOREGROUND} key={i} wrapMode="none" height={1} flexShrink={0}>{line}</text>)}
+        {wrapped.map((line, i) => <text fg={pending ? ink.live : ink.value} key={i} wrapMode="none" height={1} flexShrink={0}>{line}</text>)}
       </scrollbox>
-      <text wrapMode="none" fg={FOREGROUND} marginTop={1}>↑/↓ scroll · Esc {pending ? 'cancels' : 'closes'}</text>
+      <text wrapMode="none" fg={ink.note} marginTop={1}>↑/↓ scroll · Esc {pending ? 'cancels' : 'closes'}</text>
     </Panel>
   );
 };
@@ -27,7 +28,7 @@ export const InfoScreen = ({ title, lines, cols, maxRows, pending }: { title: st
 
 // The Bridge info panel — connection facts for the session's own listener.
 export const BridgeScreen = ({ address, secret, cols, ink }: {
-  address: string; secret: string; cols: number; ink: typeof bridgeInk.dark;
+  address: string; secret: string; cols: number; ink: typeof tuiInk.dark;
 }) => {
   const [page, setPage] = useState<'endpoints' | 'setup' | 'advisor'>('endpoints');
   const [revealed, setRevealed] = useState(false);
@@ -103,20 +104,22 @@ export const BridgeScreen = ({ address, secret, cols, ink }: {
 // and a mouse-draggable native scrollbar; no SELECT_MOUSE needed (that's the <select> shim).
 // Long lines are hand-wrapped (opentui wrapMode overlays siblings) so model ids don't clip.
 export const SessionListScreen = ({ onSelect }: { onSelect: (id: string) => void }) => {
+  const ink = useTuiInk();
   const [sessions, setSessions] = useState(() => listLogSessions());
   useEffect(() => { const timer = setInterval(() => setSessions(listLogSessions()), 1000); return () => clearInterval(timer); }, []);
   return <Panel title="Chat sessions">
-    {sessions.length > 0 && <text fg={FOREGROUND}>Last 30 minutes · All hosts</text>}
+    {sessions.length > 0 && <text fg={ink.note}>Last 30 minutes · All hosts</text>}
     {sessions.length ? <ChoiceList
       height={Math.min(sessions.length * 2, 12)}
       options={sessions.map(session => ({ name: sessionLabel(session), description: sessionDetail(session), value: session.id }))}
       onSelect={(_, option) => { if (option?.value) onSelect(String(option.value)); }} />
-      : <text wrapMode="none" fg={FOREGROUND}>No sessions in the last 30 minutes.</text>}
-    <text wrapMode="none" fg={FOREGROUND}>{sessions.length ? 'Enter open · Esc back' : 'Esc back'}</text>
+      : <text wrapMode="none" fg={ink.note}>No sessions in the last 30 minutes.</text>}
+    <text wrapMode="none" fg={ink.note}>{sessions.length ? 'Enter open · Esc back' : 'Esc back'}</text>
   </Panel>;
 };
 
 export const LogScreen = ({ id, cols }: { id: string; cols: number }) => {
+  const ink = useTuiInk();
   const [entries, setEntries] = useState(() => readSessionLog(id));
   useEffect(() => { setEntries(readSessionLog(id)); const timer = setInterval(() => setEntries(readSessionLog(id)), 500); return () => clearInterval(timer); }, [id]);
   const lines = entries.filter(entry => entry.event !== 'heartbeat').slice(-200);
@@ -124,20 +127,20 @@ export const LogScreen = ({ id, cols }: { id: string; cols: number }) => {
   const width = Math.max(cols - 1, 1);
   return (
     <Panel title="Session log">
-      <text fg={FOREGROUND} wrapMode="none" flexShrink={0}>
+      <text fg={ink.value} wrapMode="none" flexShrink={0}>
         {id}
       </text>
       <scrollbox height={16} marginTop={1} stickyScroll stickyStart="bottom" scrollY>
         {lines.length === 0
-          ? <text wrapMode="none" fg={FOREGROUND}>Session unavailable or pruned.</text>
+          ? <text wrapMode="none" fg={ink.note}>Session unavailable or pruned.</text>
           : lines.flatMap(entry => {
               const isRoute = entry.event === 'route';
               return wrapWords(formatSessionLog(entry), width).map((w, j) => (
-                <text key={`${entry.sequence}-${j}`} wrapMode="none" flexShrink={0} fg={FOREGROUND}>{isRoute ? <strong>{w}</strong> : w}</text>
+                <text key={`${entry.sequence}-${j}`} wrapMode="none" flexShrink={0} fg={isRoute ? ink.value : ink.heading}>{isRoute ? <strong>{w}</strong> : w}</text>
               ));
             })}
       </scrollbox>
-      <text wrapMode="none" fg={FOREGROUND} marginTop={1}>Latest 200 events · Esc returns · scroll up pauses follow, bottom resumes</text>
+      <text wrapMode="none" fg={ink.note} marginTop={1}>Latest 200 events · Esc returns · scroll up pauses follow, bottom resumes</text>
     </Panel>
   );
 };
@@ -145,8 +148,9 @@ export const LogScreen = ({ id, cols }: { id: string; cols: number }) => {
 // ----------------------------------------- /help ----------------------------------------- //
 
 // The /help panel — the command list, closed by Enter or Esc (the shell routes Esc).
-export const HelpScreen = ({ onDone }: { onDone: () => void }) => (
-  <Panel title="Commands">
+export const HelpScreen = ({ onDone }: { onDone: () => void }) => {
+  const ink = useTuiInk();
+  return <Panel title="Commands">
     {/* rendered FROM the shared registry (#82) — the palette's autocomplete and this list
         can never disagree. A select, not plain rows: 13+ commands clip a 24-row terminal,
         and the select brings the same height cap + scroll the other pickers use. Enter
@@ -156,6 +160,6 @@ export const HelpScreen = ({ onDone }: { onDone: () => void }) => (
       options={SLASH_COMMANDS.map((c) => ({ name: `/${c.name}${c.args ? ` ${c.args}` : ''}`, description: c.description, value: c.name }))}
       onSelect={() => onDone()}
     />
-    <text wrapMode="none" fg={FOREGROUND} marginTop={1}>Enter or Esc closes.</text>
-  </Panel>
-);
+    <text wrapMode="none" fg={ink.note} marginTop={1}>Enter or Esc closes.</text>
+  </Panel>;
+};

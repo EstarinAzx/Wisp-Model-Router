@@ -17,15 +17,21 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useKeyboard, useTerminalDimensions, type SelectProps } from '@opentui/react';
 import type { MouseEvent, SelectRenderable, SelectOption } from '@opentui/core';
-import { ACCENT, FOREGROUND, SELECT_COLORS, SELECTION, SELECTED_TEXT, commandFrameFits } from './theme';
+import { INPUT_COLORS, SELECT_COLORS, SELECTION, commandFrameFits, tuiInk, useTuiInk } from './theme';
 
 // A plain text heading also supports Unicode provider and alias names.
-export const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
-  <box flexDirection="column" marginTop={1} flexShrink={0}>
-    <text fg={FOREGROUND} wrapMode="none" height={1}><strong>{title}</strong></text>
+export const Panel = ({ title, children }: { title: string; children: ReactNode }) => {
+  const ink = useTuiInk();
+  return <box flexDirection="column" marginTop={1} flexShrink={0}>
+    <text fg={ink.heading} wrapMode="none" height={1}><strong>{title}</strong></text>
     <box marginTop={1}>{children}</box>
-  </box>
-);
+  </box>;
+};
+
+export const useInputColors = () => {
+  const ink = useTuiInk();
+  return { ...INPUT_COLORS, textColor: ink.value, focusedTextColor: ink.value, placeholderColor: ink.note };
+};
 
 // ----------------------------------------- Select scrollbar drag ----------------------------------------- //
 
@@ -91,11 +97,14 @@ type ChoiceListProps = Pick<SelectProps, 'onChange' | 'onSelect' | 'selectedInde
   height: number;
 };
 export const ChoiceList = ({ options, height, selectedIndex, onChange, onSelect, showDescription }: ChoiceListProps) => {
+  const ink = useTuiInk();
   const [highlight, setHighlight] = useState(selectedIndex ?? 0);
   const { width, height: terminalHeight } = useTerminalDimensions();
   const active = Math.min(selectedIndex ?? highlight, options.length - 1);
   const visibleRows = Math.max(1, Math.min(height, terminalHeight - (commandFrameFits(width, terminalHeight) ? 10 : 7)));
   return <select focused {...SELECT_COLORS} {...SELECT_MOUSE} showScrollIndicator
+    textColor={ink.value} focusedTextColor={ink.value} descriptionColor={ink.note}
+    selectedDescriptionColor={tuiInk.dark.note}
     height={visibleRows} showDescription={visibleRows >= 2 && (showDescription ?? true)}
     selectedIndex={Math.max(0, active)} showSelectionIndicator={false}
     options={options.map((option, i) => ({ ...option, name: (i === active ? '› ' : '  ') + option.name }))}
@@ -139,13 +148,15 @@ export const wrapWords = (text: string, cols: number): string[] => {
 // so this renders plain non-wrapping rows itself (name + hand-wrapped description lines) with a
 // windowed view: variable-height items, selection kept visible within maxRows, dim "… N more"
 // marker rows when clipped. Keyboard mirrors the native select: Up/Down (wrapping), Enter fires.
-export type WrapOption = { name: string; description: string; value: string; lines?: string[]; group?: string };
+type RouteLine = { source?: string; connector?: string; destination?: string };
+export type WrapOption = { name: string; description: string; value: string; lines?: RouteLine[]; group?: string };
 export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
   options: WrapOption[];
   cols: number;
   maxRows: number;
   onSelect: (index: number, option: WrapOption) => void;
 }) => {
+  const ink = useTuiInk();
   const { height } = useTerminalDimensions();
   maxRows = Math.max(1, Math.min(maxRows, height - 10));
   const [idx, setIdx] = useState(0);
@@ -170,20 +181,26 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
     used += rowHeight(items[end]);
   return (
     <box flexDirection="column">
-      {top.current > 0 && <text wrapMode="none" flexShrink={0} fg={FOREGROUND}>{`  … ${top.current} more`}</text>}
+      {top.current > 0 && <text wrapMode="none" flexShrink={0} fg={ink.note}>{`  … ${top.current} more`}</text>}
       {items.slice(top.current, end).flatMap(({ o, lines }, k) => {
         const i = top.current + k;
         const on = i === sel;
-        const heading = o.group && <text key={'group:' + o.value} height={1} fg={FOREGROUND}>
-          <span fg={ACCENT}>── </span><strong>{o.group}</strong>
+        const heading = o.group && <text key={'group:' + o.value} height={1} fg={ink.heading}>
+          <span fg={ink.note}>── </span><strong>{o.group}</strong>
         </text>;
-        return [heading, ...lines.map((l, j) => (
-          <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} bg={on && (o.lines || j === 0) ? SELECTION : undefined} fg={on && (o.lines || j === 0) ? SELECTED_TEXT : FOREGROUND}>
-            <span fg={ACCENT}>{on && j === 0 ? '› ' : '  '}</span>{on && j === 0 ? <strong>{l}</strong> : l}
-          </text>
-        ))];
+        return [heading, ...lines.map((line, j) => {
+          const selected = on && (typeof line !== 'string' || j === 0);
+          const rowInk = selected ? tuiInk.dark : ink;
+          const content = typeof line === 'string' ? line : <>
+            <span fg={rowInk.heading}>{line.source}</span><span fg={rowInk.note}>{line.connector}</span><span fg={rowInk.value}>{line.destination}</span>
+          </>;
+          return <text key={`${i}:${j}`} wrapMode="none" flexShrink={0} bg={selected ? SELECTION : undefined} fg={j === 0 ? rowInk.value : rowInk.note}>
+            <span fg={rowInk.value}>{on && j === 0 ? '› ' : '  '}</span>
+            {on && j === 0 ? <strong>{content}</strong> : content}
+          </text>;
+        })];
       })}
-      {end < items.length && <text wrapMode="none" flexShrink={0} fg={FOREGROUND}>{`  … ${items.length - end} more`}</text>}
+      {end < items.length && <text wrapMode="none" flexShrink={0} fg={ink.note}>{`  … ${items.length - end} more`}</text>}
     </box>
   );
 };

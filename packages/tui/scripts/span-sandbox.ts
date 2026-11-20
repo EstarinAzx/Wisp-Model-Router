@@ -17,6 +17,7 @@ const execFile = (...args: unknown[]) => {
 const safe = { ...childProcess, execFile, execFileSync: blocked, spawn: blocked, spawnSync: blocked, exec: blocked, execSync: blocked, fork: blocked };
 mock.module('child_process', () => safe);
 mock.module('node:child_process', () => safe);
+mock.module('../src/bridgePresence', () => ({ detectExternalBridge: async () => false }));
 
 export const sandbox = mkdtempSync(join(tmpdir(), 'wisp-span-'));
 console.log(`span sandbox: ${sandbox}`);
