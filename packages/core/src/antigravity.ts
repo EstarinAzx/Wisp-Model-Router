@@ -1186,9 +1186,16 @@ export const antigravityApiError = (status: number, body: string, retryAfter?: s
     const delays = [headerMs, parseAntigravityRetryDelayMs(parsed)].filter((ms): ms is number =>
       ms !== undefined && Number.isFinite(ms) && ms >= 0);
     const retryAfterMs = delays.length ? Math.max(...delays) : undefined;
+    const upstream = isObj(parsed) ? parsed.error : undefined;
+    const untimedExhaustion = retryAfterMs === undefined && upstream?.status === 'RESOURCE_EXHAUSTED';
+    const genericRefusal = untimedExhaustion && !upstream.details?.length
+      && upstream.message === 'Resource has been exhausted (e.g. check quota).';
     const failure: AntigravityFailure = {
-      ...(classified ?? { status: 429, code: ANTIGRAVITY_RATE_LIMITED_CODE, type: 'rate_limit_error', message }),
-      retryable: !classified && (retryAfterMs ?? 0) < ANTIGRAVITY_INSTANT_RETRY_MS,
+      ...(classified ?? { status: 429, code: ANTIGRAVITY_RATE_LIMITED_CODE, type: 'rate_limit_error',
+        message: genericRefusal
+          ? 'Antigravity API error 429: RESOURCE_EXHAUSTED. Google did not identify the limit. For third-party coding agents Google recommends Gemini API credentials. See https://antigravity.google/docs/faq'
+          : message }),
+      retryable: !classified && !untimedExhaustion && (retryAfterMs ?? 0) < ANTIGRAVITY_INSTANT_RETRY_MS,
       ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
     };
     if (failure.code === ANTIGRAVITY_QUOTA_EXHAUSTED_CODE && retryAfterMs !== undefined) {

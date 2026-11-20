@@ -6,6 +6,12 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Changes up to 2.0.10 are folded into the product changelog at
 `packages/vscode/CHANGELOG.md`.
 
+## [2.3.3] - 2026-11-21
+
+### Fixed
+
+- The Bridge stops after an Antigravity `RESOURCE_EXHAUSTED` response without a retry time. Claude Code receives the 429 and guidance to stop retrying that turn. [Release notes](../../docs/releases/v2.3.3.md)
+
 ## [2.3.2] - 2026-11-20
 
 ### Fixed
