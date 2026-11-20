@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/wisp.png" alt="Wisp" width="560">
+  <img src="docs/wisp.png" alt="Wisp wordmark with a purple pixel flame" width="560">
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@ Streaming, tools, images, reasoning effort, and context windows depend on the se
 
 ## Quick start
 
-New to Wisp? Open `/guide` in the terminal UI for a step-by-step walkthrough.
+New to Wisp? Type `/guide` at the Wisp prompt for a walkthrough from connecting a provider to using your first route. The guide also covers clients, quota, logs, and troubleshooting. Use `/help` for a quick command reference.
 
 **Requires:** Node.js for the npm install and an existing Claude Code installation.
 
@@ -62,6 +62,19 @@ Use `claude-wisp --model <alias>` to select an alias and apply its context budge
 
 Prefer VS Code? [Install the extension](#vs-code-extension) and use your models directly in its chat and agent views. For Desktop, see the [experimental bridge setup](#chatgpt-desktop-codex-bridge--experimental) below.
 
+### Reduce terminal motion
+
+The home flame flickers, and a smaller flame follows your selection on the routing map. To keep both flames still, set **`WISP_REDUCED_MOTION=1`** before starting Wisp.
+
+**PowerShell**
+
+```powershell
+$env:WISP_REDUCED_MOTION = '1'
+wisp
+```
+
+The PowerShell setting lasts for the current shell session. On macOS or Linux, use `WISP_REDUCED_MOTION=1 wisp` for a single launch.
+
 ## VS Code extension
 
 Your connected models appear in Copilot Chat, Agent mode, and inline chat. Below, **GPT-6 Astra** responds through **Wisp/Codex** in VS Code.
@@ -78,10 +91,10 @@ The [extension guide](packages/vscode/README.md) walks you through connecting pr
 
 ## Bridge in the TUI
 
-The **Bridge** is the local connection between Wisp and your coding tools. Run **`/bridge`** to start it or reopen its panel. You'll see the connection addresses, access secret, and the command for launching Claude Code, plus guidance for the Slot plugin and Advisor.
+The **Bridge** is the local connection between Wisp and your coding tools. Run **`/bridge`** to start it or reopen its panel. The panel shows the local connection addresses and masks the access secret. Press **S** for client setup or **Esc** to close the panel.
 
 <p align="center">
-  <img src="docs/Screenshot%202026-10-13%20113631.png" alt="Wisp 2.2.5 Bridge panel on port 41184, with the access secret redacted, Slot plugin instructions and Advisor guidance" width="960">
+  <img src="docs/Screenshot%202026-10-13%20113631.png" alt="Wisp Bridge running on port 41184 with local endpoints, a masked access secret, and the setup shortcut" width="960">
 </p>
 
 | Action | Command or key |
@@ -93,15 +106,19 @@ The **Bridge** is the local connection between Wisp and your coding tools. Run *
 | Browse sessions | `wisp logs`, or `/show logs` in the TUI |
 | Follow one session | `wisp log <session-id> -f` |
 
-Keep your access secret private; it is redacted above. Logs also include chats handled by VS Code. See [session logging](docs/session-logs.md) for identity, privacy, and retention limits.
+Logs also include chats handled by VS Code. See [session logging](docs/session-logs.md) for identity, privacy, and retention limits.
 
 ## Routing aliases
 
 Give your models names you can remember. An **alias** such as `sol`, `terra`, or `grok` points to a specific provider and model. Create or change aliases with **`/routing`** in Wisp, then launch `claude-wisp --model <alias>`. Ordinary gateway sessions still list aliases under **From gateway**, with Claude Code's own context-budget assumptions.
 
 <p align="center">
-  <img src="docs/routing-tui.png" alt="Wisp TUI Routing showing example model aliases" width="720">
+  <img src="docs/routing-tui.png" alt="Custom routing table showing the Grok 4.7, Carbon, and Hydrogen aliases and their destinations" width="720">
 </p>
+
+In **`/routing → Custom`**, select **Add alias** to name a new route. Select a saved alias for **Change provider**, **Rename alias**, or **Remove alias**. **Change provider** opens the provider list, then the model picker. Check the proposed destination and press **Enter** to apply it. In provider lists, **Custom** comes first and the rest are sorted by display name.
+
+In **`/routing → Claude Code`**, the family binding action previews stable model IDs from the public models.dev catalog. Wisp applies all four when you select **Bind Claude subscription models**. If it cannot find a complete family list, it offers **Retry** and keeps your routes. Model access depends on your subscription.
 
 <details>
 <summary>See aliases in Claude Code</summary>
