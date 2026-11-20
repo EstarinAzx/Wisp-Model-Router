@@ -1,39 +1,48 @@
 # Claude Code through Wisp
 
-`claude-wisp` launches the Claude Code installed on your PATH. It does not bundle, install or update Claude Code. Exact context profiles require Claude Code **2.1.322 or newer** and an updated, running Wisp Bridge.
+`claude-wisp` launches the Claude Code installed on your PATH through the running Wisp Bridge. It does not install or update Claude Code. The launcher requires Claude Code **2.1.322 or newer**.
 
-## Select a target and its budget
+## Choose and switch aliases
 
-Create an alias in Wisp, then select it at launch:
-
-```sh
-claude-wisp --model carbon
-claude-wisp --model grok
-```
-
-The launcher also accepts Provider IDs and configured Claude family routes. Without `--model`, it uses Wisp's Active Provider and selected model. It reports the target, token budget and metadata source before Claude Code starts. The saved alias name stays unchanged; a generated client ID carries the launch's identity internally.
-
-Codex and Antigravity limits come from their account catalogues. Other targets use available public catalogue metadata, with existing curated fallback data for known Anthropic/Grok IDs. If a usable limit is unavailable, the launcher clearly reports a conservative **128000-token fallback**; that is an assumed budget, not a verified backend limit. Public API capacity does not override account-backed Codex or Antigravity metadata.
-
-The numeric limit is applied to the child process only. A temporary settings file keeps unrelated explicit settings, including permissions, while applying Wisp's transport/model profile; it is removed when the child exits. Real auth files, persistent Claude settings and Wisp routing records are not rewritten. Context-disabling flags or competing transport overrides supplied to the launcher are refused.
-
-## Switch safely
-
-Claude Code's numeric context override is process-wide. A model change does not automatically change that number. Each launch therefore selects one target, and the Bridge rejects another model or a changed route before sending a generation request upstream.
-
-Exit Claude Code, then resume with the new target explicitly selected:
+Normal launches retain Claude Code's gateway model picker. Your saved Wisp aliases appear there alongside any Provider rows enabled by your Wisp settings. Use `/model` to switch during a conversation.
 
 ```sh
-claude-wisp --resume <session-id> --model grok
-claude-wisp --continue --model carbon
+claude-wisp
+claude-wisp --model Astra
+claude-wisp --model "Grok 4.7"
 ```
 
-This preserves native resume handling; Wisp does not kill/restart an active conversation on your behalf. Resuming a conversation that already exceeds the new model's window still depends on Claude Code's compaction and the provider's acceptance. No full-window generation guarantee is implied.
+`--model` selects the starting target without locking it. A fresh launch without a selection starts on Wisp's Active Provider. The launcher also accepts Provider IDs and configured Claude family routes. Normal `--resume`, `--continue` and `--from-pr` leave selection to Claude when neither `--model` nor a `model` key in `--settings` is supplied. Either explicit form selects the starting alias and is forwarded as `--model`, replacing the saved selection; the `--model` argument takes precedence. Native fallback arguments remain available in normal mode.
 
-Subagents inheriting the selected model share its budget. Requests for other targets, including explicitly different subagent models or fallback targets, cannot use this launch's profile. Use another launcher session for those targets. Server-side advisor calls retain their separate existing route. Concurrent launcher sessions may use different budgets without changing each other's settings.
+Gateway discovery refreshes when Claude starts and uses its native cache. Relaunch after adding an alias if the current picker has not discovered it yet. Existing user or managed model restrictions still apply.
 
-Ordinary `claude` sessions configured with Wisp's copied environment snippets remain available. They retain the gateway picker and live switching, but do **not** gain arbitrary exact context budgets from discovery. The Bridge model list cannot communicate those numeric limits to Claude Code.
+## Context trade-off
 
-## Validation
+Normal mode uses Claude Code's context estimates and your native context settings. Wisp does not claim those estimates equal each backend's actual capacity. A larger backend can compact early; switching a large conversation to a smaller backend can exceed its limit. Compaction settings are not declarations of model capacity.
 
-Run `bun packages/tui/tests/nativeClaudeContext.check.ts` with installed Claude Code. It uses a synthetic local Bridge and no real provider credentials, verifies 128K, 400K, 500K and 1M reported windows and routing, and refuses a model switch before upstream generation. Unit and HTTP tests cover profile integrity, unknown metadata, route mutation and settings conflicts. Actual large-context provider acceptance is separate from the client's displayed budget.
+Normal mode does not disable compaction, rewrite your settings, or supply one target's numeric budget to every other alias. A launch nested inside Wisp's exact mode removes the inherited Wisp profile and its fixed budget from the new child.
+
+## Opt into one exact target budget
+
+```sh
+claude-wisp --exact-context --model Astra
+claude-wisp --exact-context --model "Grok 4.7"
+```
+
+Exact mode preserves the signed, single-target profile. Codex and Antigravity limits come from their account catalogues. Other targets use available public catalogue metadata or curated known-model data. Missing metadata uses a clearly reported **128000-token fallback**, which is assumed rather than a verified backend capacity.
+
+The numeric context override applies to the child process. Its picker is restricted to that target, and the Bridge refuses other models or a changed route before generation. Switch by exiting and relaunching:
+
+```sh
+claude-wisp --exact-context --resume <session-id> --model Sol
+```
+
+Exact resume requires an explicit target. Other-target subagents and fallback targets are refused; same-target subagents share the budget. Server-side advisor routing remains separate. Normal sessions retain native model switching instead of this exact-target guarantee.
+
+When resuming a conversation created under the old pinned launcher, pass an explicit `--model <alias>` so its temporary generated model ID is replaced with the real alias. Wisp does not restart an active conversation on your behalf or guarantee that a long conversation fits a smaller backend.
+
+## Settings and validation
+
+Both modes preserve unrelated settings and native permissions, use child-only local Bridge transport, neutralize competing auth tokens, and remove their private temporary settings file on exit. Real auth files, persistent Claude settings and Wisp routes are not rewritten. Conflicting explicit transport overrides are refused. Exact mode additionally refuses settings that disable its required compaction.
+
+Run `bun packages/tui/tests/nativeClaudeContext.check.ts` with installed Claude Code. It uses only a synthetic local Bridge and disposable profiles: normal mode discovers the alias list and switches routes, while exact mode verifies 128K, 400K, 500K and 1M reported budgets and refuses a cross-target switch. Actual provider capacity and full-window generation remain separate acceptance checks.

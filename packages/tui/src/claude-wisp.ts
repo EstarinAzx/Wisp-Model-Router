@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
-// Launch the installed Claude Code with a child-only, target-bound context budget.
+// Launch installed Claude Code with native alias switching or an opt-in exact context budget.
 import { spawn, execFile } from 'child_process';
 import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { join, delimiter } from 'path';
 import { tmpdir } from 'os';
 import { request } from 'http';
-import { DEFAULT_BRIDGE_PORT, WispHome, readClaudeContext, type ClaudeContextProfile } from '@wisp/core';
+import { DEFAULT_BRIDGE_PORT, WispHome, readClaudeContext, resolveClaudeContextRoute, PROVIDERS, EMPTY_ROUTING_MAP, type ClaudeContextProfile } from '@wisp/core';
 import { parseClaudeContextArgs, buildClaudeContextLaunch, supportsClaudeContext, resolveClaudeContextSelection } from './claudeContextLaunch';
 
 // ----------------------------- Windows shim resolution ----------------------------- //
@@ -39,11 +39,17 @@ const quoteForCmd = (a: string): string =>
     : a;
 
 // The profile request stays on numeric loopback: no proxy, redirect or provider credential.
-const requestContext = (port: number, secret: string, model?: string): Promise<{ profile: ClaudeContextProfile; token: string }> =>
+const prepareBridge = (port: number, secret: string, model: string | undefined, exact: boolean): Promise<{ profile: ClaudeContextProfile; token: string } | undefined> =>
   new Promise((resolve, reject) => {
-    const data = JSON.stringify(model === undefined ? {} : { model });
-    const req = request({ host: '127.0.0.1', port, path: '/claude-code/context', method: 'POST',
-      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } }, res => {
+    const data = exact ? JSON.stringify(model === undefined ? {} : { model }) : undefined;
+    const req = request({ host: '127.0.0.1', port, path: exact ? '/claude-code/context' : '/v1/models', method: exact ? 'POST' : 'GET',
+      headers: { Authorization: `Bearer ${secret}`, ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}) } }, res => {
+      if (!exact) {
+        res.on('error', reject); res.resume();
+        if (res.statusCode === 200) resolve(undefined);
+        else reject(new Error(`Bridge model discovery failed (HTTP ${res.statusCode}). Check the running Bridge and its access secret.`));
+        return;
+      }
       let body = '';
       res.setEncoding('utf8');
       res.on('data', chunk => { body += chunk; if (body.length > 65536) req.destroy(new Error('Oversized Bridge context response.')); });
@@ -84,22 +90,38 @@ export const runClaudeWisp = async (args: string[] = process.argv.slice(2)): Pro
   try {
     const parsed = parseClaudeContextArgs(args);
     const home = new WispHome();
-    const port = home.readConfig().bridge?.port ?? DEFAULT_BRIDGE_PORT;
+    const config = home.readConfig();
+    const port = config.bridge?.port ?? DEFAULT_BRIDGE_PORT;
     const secret = home.readAuth().bridgeSecret?.trim() ?? '';
     if (!secret) throw new Error('No Bridge secret found in Wisp home ? start the Bridge first with wisp serve or /bridge.');
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid Wisp Bridge port.');
     const claude = resolveClaude();
-    const { profile, token } = await requestContext(port, secret, resolveClaudeContextSelection(parsed.model, process.env, secret));
+    const selected = resolveClaudeContextSelection(parsed.model, process.env, secret);
+    if (!parsed.exactContext) {
+      const requested = selected ?? parsed.settings.model;
+      if (requested !== undefined || !parsed.resume) {
+        const route = resolveClaudeContextRoute(requested, { providers: PROVIDERS, map: config.routing ?? EMPTY_ROUTING_MAP,
+          activeProviderId: PROVIDERS.find(p => p.id === config.provider)?.id ?? PROVIDERS[0].id,
+          modelMap: config.models ?? {}, customBaseUrl: config.customBaseUrl ?? '' });
+        parsed.model = `claude-wisp-${route.route}`;
+      }
+    }
+    const context = await prepareBridge(port, secret, selected, parsed.exactContext);
     await checkVersion(claude);
-    const launch = buildClaudeContextLaunch(port, secret, profile, token, parsed, process.env);
+    const launch = buildClaudeContextLaunch(port, secret, context?.profile, context?.token, parsed, process.env);
     temporary = mkdtempSync(join(tmpdir(), 'wisp-claude-context-'));
     const settings = join(temporary, 'settings.json');
     // User temp ACLs protect Windows; owner-only permissions protect POSIX, matching Wisp's store policy.
     writeFileSync(settings, JSON.stringify(launch.settings), { encoding: 'utf8', mode: 0o600 });
     const command = invocation(claude, ['--settings', settings, ...launch.args]);
-    console.error(`claude-wisp: ${profile.route} ? ${profile.target.model}; ${profile.contextWindow} context tokens (${profile.source}).`);
-    if (profile.source === 'fallback') console.error('Target capacity unavailable: using a conservative 128000-token budget.');
-    console.error('To change targets, exit and relaunch with --resume <session> --model <alias>. Other-target subagents/fallbacks are refused.');
+    if (context) {
+      const { profile } = context;
+      console.error(`claude-wisp: ${profile.route} -> ${profile.target.model}; ${profile.contextWindow} context tokens (${profile.source}).`);
+      if (profile.source === 'fallback') console.error('Target capacity unavailable: using a conservative 128000-token budget.');
+      console.error('To change targets, exit and relaunch with --exact-context --resume <session> --model <alias>. Other-target subagents/fallbacks are refused.');
+    } else {
+      console.error('claude-wisp: alias switching enabled; context uses Claude Code estimates. Use --exact-context --model <alias> for a pinned budget.');
+    }
     return await new Promise<number>(resolve => {
       const child = spawn(command.file, command.args, { stdio: 'inherit', env: launch.env, windowsVerbatimArguments: command.windowsVerbatimArguments });
       const interrupt = () => {};

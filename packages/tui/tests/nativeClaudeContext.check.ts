@@ -1,6 +1,6 @@
 // Run explicitly with Bun and Claude Code >=2.1.322 installed. No real-provider requests or credentials.
 import { strict as assert } from 'assert';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { createServer } from 'net';
@@ -35,12 +35,12 @@ const deps: BridgeDeps = {
 const bridge = createBridgeServer(deps);
 await bridge.start();
 const home = join(dir, 'wisp'); mkdirSync(home);
-writeFileSync(join(home, 'config.json'), JSON.stringify({ bridge: { port } }));
+writeFileSync(join(home, 'config.json'), JSON.stringify({ provider: 'xai', routing: deps.routingMap(), bridge: { port } }));
 writeFileSync(join(home, 'auth.json'), JSON.stringify({ bridgeSecret: 'synthetic-secret' }));
 try {
   for (const [model, expected] of Object.entries(limits)) {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => ['PATH', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'PATHEXT', 'SYSTEMDRIVE'].includes(key.toUpperCase())));
-    const child = Bun.spawn([...launcher, '--model', model,
+    const child = Bun.spawn([...launcher, '--exact-context', '--model', model,
       '-p', 'Reply OK.', '--output-format', 'json', '--system-prompt', 'Reply OK.', '--safe-mode', '--setting-sources', '',
       '--no-session-persistence', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}'], {
       cwd: dir, env: { ...env, WISP_HOME: home, CLAUDE_CONFIG_DIR: join(dir, model), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' }, stdout: 'pipe', stderr: 'pipe',
@@ -56,11 +56,24 @@ try {
     assert.equal(sent.at(-1), model);
     console.log(JSON.stringify({ model, expected, windows, routed: sent.at(-1), passed: true }));
   }
+  for (const exact of [false, true]) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => ['PATH', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'PATHEXT', 'SYSTEMDRIVE'].includes(key.toUpperCase())));
-  const sdk = spawn(launcher[0], [...launcher.slice(1), '--model', 'fixture-500k', '-p',
+  if (!exact) {
+    // Native discovery refreshes asynchronously; warm it through a real launch before inspecting the SDK snapshot.
+    const warm = Bun.spawn([...launcher, '--model', 'fixture-128k', '-p', 'Reply OK.', '--output-format', 'json',
+      '--system-prompt', 'Reply OK.', '--safe-mode', '--setting-sources', '', '--no-session-persistence',
+      '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}'], {
+      cwd: dir, env: { ...env, WISP_HOME: home, CLAUDE_CONFIG_DIR: join(dir, 'switch-picker'), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+      stdout: 'pipe', stderr: 'pipe',
+    });
+    const timeout = setTimeout(() => warm.kill(), 30000);
+    const [output, error, code] = await Promise.all([new Response(warm.stdout).text(), new Response(warm.stderr).text(), warm.exited]);
+    clearTimeout(timeout); assert.equal(code, 0, error); assert.equal(JSON.parse(output).is_error, false);
+  }
+  const sdk = spawn(launcher[0], [...launcher.slice(1), ...(exact ? ['--exact-context'] : []), '--model', exact ? 'fixture-500k' : 'fixture-128k', '-p',
     '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--system-prompt', 'Reply OK.', '--safe-mode',
-    '--setting-sources', '', '--no-session-persistence', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}'], {
-    cwd: dir, env: { ...env, WISP_HOME: home, CLAUDE_CONFIG_DIR: join(dir, 'switch'), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+    '--setting-sources', '', '--no-session-persistence', '--debug-file', join(dir, exact ? 'exact-debug.log' : 'picker-debug.log'), '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}'], {
+    cwd: dir, env: { ...env, WISP_HOME: home, CLAUDE_CONFIG_DIR: join(dir, exact ? 'switch-exact' : 'switch-picker'), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
     stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
   });
   const pending = new Map<string, (value: any) => void>();
@@ -77,16 +90,33 @@ try {
     pending.set(id, value => { clearTimeout(timeout); done(value); }); sdk.stdin.write(JSON.stringify(message) + '\n');
   });
   try {
-    await send('init', { type: 'control_request', request_id: 'init', request: { subtype: 'initialize' } });
+    const initialized = await send('init', { type: 'control_request', request_id: 'init', request: { subtype: 'initialize' } });
     const before = sent.length;
-    const switched = await send('switch', { type: 'control_request', request_id: 'switch', request: { subtype: 'set_model', model: 'claude-opus-5' } });
-    assert.equal(switched.response.subtype, 'error', 'A different model must be refused');
-    assert.equal(sent.length, before, 'Refused switch must not spend an upstream request');
-    const result = await send('result', { type: 'user', message: { role: 'user', content: 'Reply OK.' }, parent_tool_use_id: null });
-    assert.equal(result.is_error, false);
-    assert(Object.values(result.modelUsage).some((usage: any) => usage.contextWindow === 500000));
-    console.log(JSON.stringify({ safeSwitch: 'refused-before-upstream', retainedWindow: 500000, passed: true }));
+    if (exact) {
+      const switched = await send('switch', { type: 'control_request', request_id: 'switch', request: { subtype: 'set_model', model: 'claude-opus-5' } });
+      assert.equal(switched.response.subtype, 'error', 'A different model must be refused');
+      assert.equal(sent.length, before, 'Refused switch must not spend an upstream request');
+      const result = await send('result', { type: 'user', message: { role: 'user', content: 'Reply OK.' }, parent_tool_use_id: null });
+      assert.equal(result.is_error, false);
+      assert(Object.values(result.modelUsage).some((usage: any) => usage.contextWindow === 500000));
+      console.log(JSON.stringify({ exact: true, safeSwitch: 'refused-before-upstream', retainedWindow: 500000, passed: true }));
+    } else {
+      const models = initialized.response.response.models.map((model: any) => model.value);
+      for (const alias of Object.keys(limits)) assert(models.includes(`claude-wisp-${alias}`), `Missing alias ${alias}: ${JSON.stringify(models)}`);
+      const first = await send('result', { type: 'user', message: { role: 'user', content: 'Reply OK.' }, parent_tool_use_id: null });
+      assert.equal(first.is_error, false); assert.equal(sent.at(-1), 'fixture-128k');
+      const switched = await send('switch', { type: 'control_request', request_id: 'switch', request: { subtype: 'set_model', model: 'claude-wisp-fixture-400k' } });
+      assert.equal(switched.response.subtype, 'success');
+      const second = await send('result', { type: 'user', message: { role: 'user', content: 'Reply OK again.' }, parent_tool_use_id: null });
+      assert.equal(second.is_error, false); assert.equal(sent.at(-1), 'fixture-400k');
+      console.log(JSON.stringify({ exact: false, aliases: Object.keys(limits), switchedTo: sent.at(-1), windows: Object.fromEntries(Object.entries(second.modelUsage).map(([model, usage]: [string, any]) => [model, usage.contextWindow])), passed: true }));
+    }
+  } catch (error) {
+    const log = join(dir, exact ? 'exact-debug.log' : 'picker-debug.log');
+    if (existsSync(log)) console.error(readFileSync(log, 'utf8').split('\n').filter(line => /gateway|discovery|model.*cache/i.test(line)).join('\n'));
+    throw error;
   } finally { sdk.stdin.end(); await exited; lines.close(); }
+  }
 } finally {
   bridge.stop(); globalThis.fetch = originalFetch; rmSync(dir, { recursive: true, force: true });
 }

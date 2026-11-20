@@ -6,6 +6,18 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Changes up to 2.0.10 are folded into the product changelog at
 `packages/vscode/CHANGELOG.md`.
 
+## [2.3.2] - 2026-11-20
+
+### Fixed
+
+- Restore Claude Code's full gateway alias picker and live switching in normal `claude-wisp` sessions. `--model` selects only the starting target; normal resume and fallback retain native behavior.
+- Keep signed single-target context profiles behind `--exact-context`. Exact mode retains its budget, switch/fallback guards and explicit-target resume requirement.
+- Clear inherited Wisp-only context profiles when launching normal mode from an exact session. Transport authentication, permissions and private temporary-file cleanup remain enforced.
+
+### Surfaces
+
+- **Terminal/npm 2.3.2** ships the launcher fix. **Companion VSIX 1.14.15** bundles updated shared exact-mode relaunch guidance. Slot **1.7.6**, Desktop protocol **5** and Claude Code request stamp **2.1.329** are unchanged. [Release notes](../../docs/releases/v2.3.2.md)
+
 ## [2.3.1] - 2026-11-20
 
 - Routing groups have a blank line between sections. Claude family binding shows current stable model IDs from the public Anthropic catalog on models.dev and applies them together when selected. An unavailable or incomplete catalog leaves routes intact.

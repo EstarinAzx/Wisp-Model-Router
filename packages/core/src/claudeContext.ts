@@ -16,7 +16,7 @@ export type ClaudeContextProfile = ClaudeContextRoute & ClaudeContextWindow & { 
 const validText = (value: unknown): value is string => typeof value === 'string' && value.length > 0
   && value.length <= 2048 && value.trim() === value && !/[\x00-\x1f\x7f]/.test(value);
 const validWindow = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) > 1 && (value as number) <= 10_000_000;
-const refusal = 'Claude context target changed or is unavailable. Exit and relaunch claude-wisp --resume <session> --model <alias> to select a new target and budget.';
+const refusal = 'Claude context target changed or is unavailable. Exit and relaunch claude-wisp --exact-context --resume <session> --model <alias> to select a new target and budget.';
 
 export const resolveClaudeContextRoute = (requested: string | undefined, state: ClaudeContextState): ClaudeContextRoute => {
   let route = requested ?? state.activeProviderId;
