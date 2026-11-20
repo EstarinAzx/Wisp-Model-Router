@@ -83,6 +83,40 @@ function drawing(width: number, height: number) {
   }
   return {line, dot, flame, finish}
 }
+const letterforms = [
+  ['##     ##','##     ##','##     ##','##     ##','##  #  ##','## ### ##','## ### ##',' ### ### ',' ### ### ','  #   #  ','         ','         '],
+  ['##','##','  ','##','##','##','##','##','##','##','  ','  '],
+  ['       ','       ','       ',' ##### ','##     ','##     ',' ##### ','     ##','     ##',' ##### ','       ','       '],
+  ['       ','       ','       ','###### ','##   ##','##   ##','##   ##','###### ','##     ','##     ','##     ','##     '],
+  ['     ','     ','     ','     ','     ','     ','     ','     ','     ','     ','#####','#####'],
+]
+const lettering = letterforms[0].map((_,r)=>letterforms.map(glyph=>glyph[r]).join('  '))
+export const baseNameWidth = lettering[0].length
+export const lanternWidth = 34
+export function wordmark(width:number) {
+  const rows=Math.round(6*width/baseNameWidth)
+  const ink=(x:number,y:number)=>Number(lettering[Math.floor((y+.5)*6/rows)][Math.floor((x+.5)*baseNameWidth/width)]==='#')
+  return Array.from({length:rows},(_,r)=>Array.from({length:width},(_,x)=>
+    [' ','▀','▄','█'][ink(x,r*2)+2*ink(x,r*2+1)]).join(''))
+}
+
+// The three curves and the flame form one Lantern emblem. Flight attaches its wake
+// to the start of the lower curl instead of drawing a second version of the emblem.
+export function homeArt(width:number, scale:1|2, nameWidth:number, flying:boolean) {
+  const left=flying ? 2*(width-lanternWidth*scale) : 0
+  const pt=(x:number,y:number):Point=>[left+x*scale,y*scale]
+  const d=drawing(width,(flying?14:10)*scale)
+  if(flying) {
+    const x=nameWidth*2-1, y=48*scale-1, end=pt(4,33), gap=end[0]-x
+    d.line([[x,y],[x+gap*.3,y+4*scale],[x+gap*.68,end[1]-2*scale],end],3)
+    d.line([[x,y],[x+gap*.25,y+8*scale],[x+gap*.72,end[1]+2*scale],end],1)
+  }
+  d.line([pt(4,33),pt(8,17),pt(51,45),pt(53,24)],2)
+  d.line([pt(53,24),pt(54,18),pt(48,15),pt(41,16)],1)
+  d.line([pt(4,33),pt(13,25),pt(30,40),pt(43,29)],3)
+  d.flame(left+34*scale,20*scale,.86*scale)
+  return d.finish()
+}
 export function routeArt(target: number) {
   const d = drawing(21,8)
   const end = 6+target*10

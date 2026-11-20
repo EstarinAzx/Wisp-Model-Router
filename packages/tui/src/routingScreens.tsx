@@ -232,10 +232,11 @@ const destination = (target?: Target) => target ? `${target.providerId} / ${targ
 
 const RouteTrace = ({ row, assigned, proposed }: { row: RouteRow; assigned?: Target; proposed?: Target }) => {
   const { width, height } = useTerminalDimensions();
-  const wide = flightWidth(width) >= 72 && height >= 28;
+  const panelWidth = Math.min(flightWidth(width), 76);
+  const wide = panelWidth >= 72 && height >= 28;
   const source = rowLabel(row);
   const sourceCols = Math.min(18, Math.max(9, source.length + 2));
-  const cols = Math.max(1, flightWidth(width) - (wide ? sourceCols + 21 : 0));
+  const cols = Math.max(1, panelWidth - (wide ? sourceCols + 21 : 0));
   const changed = proposed && (proposed.model !== assigned?.model || proposed.providerId !== assigned?.providerId);
   const label = (text: string) => wrapWords(text, cols).map((line, i) =>
     <text key={i} fg={FOREGROUND} height={1} wrapMode="none">{line}</text>);

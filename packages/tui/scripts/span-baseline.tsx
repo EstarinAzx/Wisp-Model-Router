@@ -19,6 +19,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { sandbox } from './span-sandbox';
 import { readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -160,22 +161,25 @@ root.calculateLayout();
 assert(currentFocusedEditor.getLayoutNode().getComputedWidth() <= 42, 'the command input must fit during a live shrink');
 root.resize(100, 40);
 root.calculateLayout();
-let homeArtwork: string[] | undefined;
 for (const [width, height] of [[80, 24], [110, 34], [52, 24], [42, 10], [176, 44], [100, 40]]) {
   await reactAct(async () => setup.resize(width, height));
   const frame = await waitForFrame(f => f.split('\n')[0].length === width && f.includes('Type / for commands'));
   assert(frame.includes('Bridge idle') && frame.includes('q quit'), 'Home footer must describe this listener and its exit key');
   if (height === 10) assert(frame.includes('Wisp_'), 'short terminals use the compact wordmark');
-  if (height >= 14) {
+  if (width >= 80 && height >= 21) {
     const rows = frame.split('\n');
     const art = rows.slice(0, rows.findIndex(row => row.includes('BYOK model router')))
       .map(row => row.trimEnd()).filter(Boolean);
-    assert.equal(art.length, 5, 'home artwork stays five rows tall');
     const inset = Math.min(...art.map(row => row.search(/\S/)));
-    const cells = art.map(row => row.slice(inset));
-    assert(cells.every(row => row.length <= 32), 'artwork fits within 32 columns');
-    if (homeArtwork) assert.deepEqual(cells, homeArtwork);
-    homeArtwork = cells;
+    const glyphs = art.map(row => row.slice(inset)).join('\n');
+    // The approved 80×24 reference, with only the outer window margin removed.
+    assert.equal(createHash('sha256').update(glyphs).digest('hex'),
+      'ba5193bfa52ed469464f1a3f3f6a69bdd5744516b8190c9b3a65cb7fad874345', 'Flight keeps the original windowed flame and lettering at every larger size');
+    const inks = new Set(setup.captureSpans().lines.flatMap(row => row.spans
+      .filter(span => span.text.trim()).map(span => span.fg.toInts().slice(0, 3).join(','))));
+    for (const tone of ['173,119,239', '211,167,255', '255,240,255']) {
+      assert(inks.has(tone), 'the Lantern must preserve each original flame layer');
+    }
   }
 }
 

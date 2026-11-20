@@ -121,8 +121,8 @@ export const App = () => {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderer = useRenderer();
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
-  const panelCols = flightWidth(termWidth);
   const isHome = mode.kind === 'input' && line === '';
+  const panelCols = Math.min(flightWidth(termWidth), isHome ? termWidth : 76);
   const isPicker = ['providers', 'provider-menu', 'key-pick', 'model-pick', 'oauth-pick', 'effort-pick',
     'routing', 'routing-section', 'route-provider', 'route-model-pick'].includes(mode.kind);
   const feedback = status ? wrapWords(status, panelCols) : [];
