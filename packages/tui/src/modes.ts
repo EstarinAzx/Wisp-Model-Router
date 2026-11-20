@@ -59,7 +59,8 @@ export type Mode =
   | { kind: 'routing-section'; section: RoutingSection }
   | { kind: 'alias-name' }
   | { kind: 'alias-rename'; name: string }
-  | { kind: 'route-provider'; row: RouteRow }
+  | { kind: 'alias-actions'; name: string }
+  | { kind: 'route-provider'; row: RouteRow; fromAliasActions?: true }
   | { kind: 'route-model-loading'; row: RouteRow; provider: Provider }
   | RouteEditor
   | { kind: 'route-confirm'; editor: RouteEditor; target: Target };

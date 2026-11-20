@@ -51,7 +51,7 @@ import {
 } from './providerScreens';
 import {
   routingMap, rowLabel, sectionOf,
-  RoutingScreen, RoutingSectionScreen, AliasNameScreen, AliasRenameScreen, RouteProviderScreen,
+  RoutingScreen, RoutingSectionScreen, AliasActionsScreen, AliasNameScreen, AliasRenameScreen, RouteProviderScreen,
   RouteModelLoadingScreen, RouteConfirmScreen, RouteModelPickScreen, RouteModelFreeScreen,
 } from './routingScreens';
 import { PaletteScreen } from './paletteScreen';
@@ -158,7 +158,7 @@ export const App = () => {
   const framed = !isHome && commandFrameFits(termWidth, termHeight);
   const panelCols = Math.min(flightWidth(termWidth), isHome ? termWidth : 76);
   const isPicker = ['providers', 'provider-menu', 'key-pick', 'model-pick', 'oauth-pick', 'effort-pick',
-    'routing', 'routing-section', 'route-provider', 'route-model-pick'].includes(mode.kind);
+    'routing', 'routing-section', 'alias-actions', 'route-provider', 'route-model-pick'].includes(mode.kind);
   const feedback = status ? wrapWords(status, panelCols) : [];
   const artHeight = termHeight - (feedback.length ? feedback.length + 1 : 0);
 
@@ -221,6 +221,15 @@ export const App = () => {
   const backToSection = (section: RoutingSection, message?: string) => {
     if (message) setStatus(message);
     setMode({ kind: 'routing-section', section });
+  };
+
+  const openRouteRow = (row: RouteRow) => {
+    setStatus('');
+    if (row.kind === 'alias' && routingMap().aliases.some(alias => alias.name === row.name)) {
+      setMode({ kind: 'alias-actions', name: row.name });
+    } else {
+      setMode({ kind: 'route-provider', row });
+    }
   };
 
   const reportActionError = (action: () => void) => {
@@ -603,6 +612,9 @@ export const App = () => {
         : mode.kind === 'provider-menu' ? backToProviders()
         : mode.kind === 'key-entry' && mode.origin === 'menu' ? backToMenu(mode.provider)
         : mode.kind === 'signin-wait' && mode.origin === 'menu' ? backToMenu(mode.provider)
+        : mode.kind === 'alias-actions' ? backToSection('aliases')
+        : mode.kind === 'route-provider' && mode.row.kind === 'alias' && mode.fromAliasActions
+          ? setMode({ kind: 'alias-actions', name: mode.row.name })
         : mode.kind === 'alias-name' || mode.kind === 'alias-rename' ? backToSection('aliases', 'Cancelled.')
         : mode.kind === 'route-provider' || mode.kind === 'route-model-loading' || mode.kind === 'route-model-pick' || mode.kind === 'route-model-free'
           ? backToSection(sectionOf(mode.row), 'Cancelled.')
@@ -725,7 +737,7 @@ export const App = () => {
           cols={panelCols}
           onAddAlias={() => setMode({ kind: 'alias-name' })}
           onBind={bindClaudeFamilies}
-          onPickRow={(row) => { setStatus(''); setMode({ kind: 'route-provider', row }); }}
+          onPickRow={openRouteRow}
         />
       )}
 
@@ -733,7 +745,7 @@ export const App = () => {
         <AliasNameScreen
           onBack={(message) => backToSection('aliases', message)}
           onStatus={setStatus}
-          onNamed={(name) => setMode({ kind: 'route-provider', row: { kind: 'alias', name } })}
+          onNamed={name => openRouteRow({ kind: 'alias', name })}
         />
       )}
 
@@ -745,12 +757,17 @@ export const App = () => {
         />
       )}
 
+      {mode.kind === 'alias-actions' && (
+        <AliasActionsScreen name={mode.name} cols={panelCols}
+          onChangeProvider={() => setMode({ kind: 'route-provider', row: { kind: 'alias', name: mode.name }, fromAliasActions: true })}
+          onRename={() => setMode({ kind: 'alias-rename', name: mode.name })}
+          onRemove={() => clearRow({ kind: 'alias', name: mode.name })} />
+      )}
       {mode.kind === 'route-provider' && (
         <RouteProviderScreen
           row={mode.row}
           cols={panelCols}
           onClear={() => clearRow(mode.row)}
-          onRename={(name) => setMode({ kind: 'alias-rename', name })}
           onPick={(p) => startRouteModel(mode.row, p)}
         />
       )}

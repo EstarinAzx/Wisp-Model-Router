@@ -3,7 +3,7 @@ import { act } from 'react';
 import { testRender } from '@opentui/react/test-utils';
 import { PROVIDERS, type Provider } from '@wisp/core';
 import { KeyPickScreen, OauthPickScreen, ProvidersScreen } from '../src/providerScreens';
-import { RouteProviderScreen } from '../src/routingScreens';
+import { AliasActionsScreen, RouteProviderScreen } from '../src/routingScreens';
 import { activeProvider, home } from '../src/store';
 
 const press = async (ui: Awaited<ReturnType<typeof testRender>>, ...keys: ('RETURN' | 'ARROW_DOWN' | 'ARROW_UP')[]) => {
@@ -41,36 +41,31 @@ test('provider pickers pin Custom and use display names while retaining provider
   } finally { auth.mockRestore(); config.mockRestore(); }
 });
 
-test('only a saved alias has action groups; arrows and Enter skip the headings', async () => {
-  const alias = { name: 'fast', target: { providerId: 'xai', model: 'example' } };
-  const config = spyOn(home, 'readConfig').mockReturnValue({ routing: { families: {}, aliases: [alias] } });
+test('saved alias actions dispatch separately from provider choices', async () => {
   const picked: string[] = [];
-  const props = { cols: 72, onClear: () => picked.push('clear'), onRename: (name: string) => picked.push('rename ' + name),
-    onPick: (p: Provider) => picked.push(p.id) };
+  const ui = await testRender(<AliasActionsScreen name="fast" cols={72}
+    onChangeProvider={() => picked.push('change')} onRename={() => picked.push('rename')}
+    onRemove={() => picked.push('remove')} />, { width: 80, height: 24 });
   try {
-    for (const name of ['fast', 'new']) {
-      const ui = await testRender(<RouteProviderScreen {...props} row={{ kind: 'alias', name }} />, { width: 80, height: 24 });
-      try {
-        await ui.renderOnce();
-        const frame = ui.captureCharFrame();
-        if (name === 'fast') {
-          expect(frame).toMatch(/Alias actions[\s\S]+› Rename alias[\s\S]+Remove alias[\s\S]+── Providers[\s\S]+Custom/);
-          await press(ui, 'RETURN', 'ARROW_DOWN', 'RETURN', 'ARROW_DOWN', 'RETURN');
-          for (let i = 0; i < 5; i++) await press(ui, 'ARROW_DOWN');
-          await ui.renderOnce();
-          expect(ui.captureCharFrame()).toContain('› Grok');
-          await press(ui, 'RETURN');
-        } else {
-          expect(frame).not.toContain('Alias actions');
-          expect(frame).not.toContain('Rename alias');
-          expect(frame).not.toContain('Remove alias');
-          expect(frame).toMatch(/› Custom[\s\S]+Anthropic[\s\S]+Antigravity/);
-          await press(ui, 'RETURN');
-        }
-      } finally { await act(async () => { ui.renderer.destroy(); }); }
-    }
-    expect(picked).toEqual(['rename fast', 'clear', 'custom', 'xai', 'custom']);
-  } finally { config.mockRestore(); }
+    await ui.renderOnce();
+    const frame = ui.captureCharFrame();
+    expect(frame).toMatch(/Alias actions[\s\S]+› Change provider[\s\S]+Rename alias[\s\S]+Remove alias/);
+    expect(frame).not.toContain('Custom');
+    await press(ui, 'RETURN', 'ARROW_DOWN', 'RETURN', 'ARROW_DOWN', 'RETURN');
+    expect(picked).toEqual(['change', 'rename', 'remove']);
+  } finally { await act(async () => ui.renderer.destroy()); }
+
+  const providers = await testRender(<RouteProviderScreen row={{ kind: 'alias', name: 'fast' }} cols={72}
+    onClear={() => picked.push('clear')} onPick={p => picked.push(p.id)} />, { width: 80, height: 24 });
+  try {
+    await providers.renderOnce();
+    expect(providers.captureCharFrame()).toMatch(/› Custom[\s\S]+Anthropic[\s\S]+Antigravity/);
+    expect(providers.captureCharFrame()).not.toContain('Remove alias');
+    await press(providers, 'RETURN');
+    for (let i = 0; i < 5; i++) await press(providers, 'ARROW_DOWN');
+    await press(providers, 'RETURN');
+    expect(picked.slice(3)).toEqual(['custom', 'xai']);
+  } finally { await act(async () => providers.renderer.destroy()); }
 });
 
 test('family and Codex routes keep their clear action after the provider list on a short screen', async () => {
@@ -79,7 +74,7 @@ test('family and Codex routes keep their clear action after the provider list on
   try {
     for (const row of [{ kind: 'family', family: 'opus' }, { kind: 'codex-model', name: 'example' }] as const) {
       const ui = await testRender(<RouteProviderScreen row={row} cols={44} onClear={() => calls.push('clear')}
-        onRename={() => calls.push('rename')} onPick={p => calls.push(p.id)} />, { width: 48, height: 16 });
+        onPick={p => calls.push(p.id)} />, { width: 48, height: 16 });
       try {
         await ui.renderOnce();
         expect(ui.captureCharFrame()).toContain('› Custom');

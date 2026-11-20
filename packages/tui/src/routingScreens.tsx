@@ -215,37 +215,39 @@ export const AliasRenameScreen = ({ name, onBack, onStatus }: {
   </Panel>
 );
 
-// Pick a row's Provider — alias rows lead with the rename/remove verbs.
-export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
+export const AliasActionsScreen = ({ name, cols, onChangeProvider, onRename, onRemove }: {
+  name: string; cols: number; onChangeProvider: () => void; onRename: () => void; onRemove: () => void;
+}) => {
+  const row = { kind: 'alias', name } as const;
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row));
+  return <Panel title={`Alias actions — ${name}`}>
+    {trace.view}
+    <WrapSelect cols={cols} maxRows={Math.min(12, trace.pickerRows - 2)} options={[
+      { name: 'Change provider', description: 'choose the provider and model for this alias', value: 'provider' },
+      { name: 'Rename alias', description: 'keep the Target, change the bridged name', value: 'rename' },
+      { name: 'Remove alias', description: 'delete this bridged name', value: 'remove' },
+    ]} onSelect={(_i, opt) => {
+      if (opt.value === 'provider') onChangeProvider();
+      if (opt.value === 'rename') onRename();
+      if (opt.value === 'remove') onRemove();
+    }} />
+  </Panel>;
+};
+
+export const RouteProviderScreen = ({ row, cols, onClear, onPick }: {
   row: RouteRow;
   cols: number;
   onClear: () => void;
-  onRename: (name: string) => void;
   onPick: (p: Provider) => void;
 }) => {
-  const map = routingMap();
-  const trace = useRouteTrace(row, rowTarget(map, row));
-  const savedAlias = row.kind === 'alias' && map.aliases.some(alias => alias.name === row.name);
+  const trace = useRouteTrace(row, rowTarget(routingMap(), row));
   return <Panel title={`Route ${rowLabel(row)} via...`}>
     {trace.view}
     <WrapSelect
       cols={cols}
       maxRows={Math.min(12, trace.pickerRows - 2)} // WrapSelect can show a “more” row at each end.
       options={[
-        // Alias rows lead with the edit verbs (#79) — no scrolling past every Provider to
-        // rename. Only for aliases already IN the map: the add-alias flow passes through here
-        // before its row is persisted, and rename/remove on a nonexistent alias dead-ends.
-        // Leading-space values can't collide with Provider ids (ids never start with a space).
-        ...(savedAlias
-          ? [
-              { group: 'Alias actions', name: 'Rename alias', description: 'keep the Target, change the bridged name', value: ' rename' },
-              { name: 'Remove alias', description: 'delete this bridged name', value: ' clear' },
-            ]
-          : []),
-        ...pickerProviders.map((p, index) => ({
-          group: savedAlias && index === 0 ? 'Providers' : undefined,
-          name: p.label, description: p.id, value: p.id,
-        })),
+        ...pickerProviders.map(p => ({ name: p.label, description: p.id, value: p.id })),
         // A Family route is cleared, never renamed — its picker keeps clear at the bottom.
         ...(row.kind !== 'alias'
           ? [{ name: 'Clear route', description: row.kind === 'family' ? 'family falls back to the Active Provider' : 'remove this binding; Alias precedence still applies', value: ' clear' }]
@@ -253,7 +255,6 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
       ]}
       onSelect={(_i, opt) => {
         if (opt.value === ' clear') { onClear(); return; }
-        if (opt.value === ' rename' && row.kind === 'alias') { onRename(row.name); return; }
         const p = PROVIDERS.find((x) => x.id === opt.value);
         if (p) onPick(p);
       }}

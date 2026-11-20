@@ -32,7 +32,7 @@ const chapters = [
     'Claude Code groups requests by family, such as Sonnet or Haiku. Select a family to set its destination. Clearing its explicit route returns that family to the Active Provider. Bind Claude subscription models shows the latest stable IDs in the public catalog. Press Enter on Bind to apply all four. Your subscription determines access.',
     'Codex routes apply to an exact model name. Pick the client model you want to redirect, then choose its destination. An alias with the same name takes precedence.',
     'Custom holds aliases such as first. Select Add alias, enter a unique name, then pick a provider and model. Check the Proposed destination and press Enter to apply, or Esc to revise it.',
-    'To edit a saved alias, select it. Choose a provider to change its destination, Rename alias to keep the destination under another name, or Remove alias to delete that name.',
+    'To edit a saved alias, select it. Choose Change provider to pick a new provider and model, Rename alias to keep the destination under another name, or Remove alias to delete that name.',
   ] },
   { title: 'Bridge and clients', paragraphs: [
     'The Bridge connects a coding client to Wisp on this computer. In Wisp, `/bridge` starts it or shows the current host. The header shows Bridge up while a listener is running. Run one host at a time.',

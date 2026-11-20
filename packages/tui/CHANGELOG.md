@@ -11,7 +11,7 @@ Changes up to 2.0.10 are folded into the product changelog at
 - Routing groups have a blank line between sections. Claude family binding shows current stable model IDs from the public Anthropic catalog on models.dev and applies them together when selected. An unavailable or incomplete catalog leaves routes intact.
 
 - The home flame flickers in place. A smaller animated flame follows the selected routing row and shows the assigned or proposed destination.
-- Provider pickers pin Custom first and sort the rest by display name. Existing aliases show separate action and provider headings.
+- Provider pickers pin Custom first and sort the rest by display name. Open Change provider in a saved alias’s action menu to choose its destination.
 - Open `/guide` for a first-route walkthrough, setup, routing and troubleshooting. Use `/help` for the command list.
 
 ### Surfaces
