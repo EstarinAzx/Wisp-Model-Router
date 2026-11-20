@@ -113,7 +113,7 @@ Logs also include chats handled by VS Code. See [session logging](docs/session-l
 Give your models names you can remember. An **alias** such as `sol`, `terra`, or `grok` points to a specific provider and model. Create or change aliases with **`/routing`** in Wisp, then launch `claude-wisp --model <alias>`. The launcher lists aliases under **From gateway** and allows live switching, with Claude Code's own context-budget assumptions. Exact budgets are available through `--exact-context`, which pins the selected target.
 
 <p align="center">
-  <img src="docs/routing-tui.png" alt="Custom routing table showing the Grok 4.7, Carbon, and Hydrogen aliases and their destinations" width="720">
+  <img src="docs/routing-tui.png" alt="Custom routing table showing the Grok 4.7, Astra, Sol, and Terra aliases and their destinations" width="720">
 </p>
 
 In **`/routing → Custom`**, select **Add alias** to name a new route. Select a saved alias for **Change provider**, **Rename alias**, or **Remove alias**. **Change provider** opens the provider list, then the model picker. Check the proposed destination and press **Enter** to apply it. In provider lists, **Custom** comes first and the rest are sorted by display name.
@@ -124,13 +124,13 @@ In **`/routing → Claude Code`**, the family binding action previews stable mod
 <summary>See aliases in Claude Code</summary>
 
 <p align="center">
-  <img src="docs/claude-model-picker.png" alt="Claude Code model picker showing Wisp gateway aliases" width="720">
+  <img src="docs/claude-model-picker.png" alt="Claude Code model picker with Astra selected from the Wisp gateway aliases" width="720">
 </p>
 
 Once selected, the alias is the model you work with in your session:
 
 <p align="center">
-  <img src="docs/claude-wisp-session.png" alt="Claude Code session using the grok alias through Wisp" width="720">
+  <img src="docs/claude-wisp-session.png" alt="Claude Code session using the Astra alias with xhigh effort through Wisp" width="720">
 </p>
 
 </details>
