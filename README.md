@@ -37,6 +37,8 @@ Streaming, tools, images, reasoning effort, and context windows depend on the se
 
 ## Quick start
 
+New to Wisp? Open `/guide` in the terminal UI for a step-by-step walkthrough.
+
 **Requires:** Node.js for the npm install and an existing Claude Code installation.
 
 ```sh

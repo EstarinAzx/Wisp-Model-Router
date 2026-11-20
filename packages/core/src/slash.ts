@@ -34,6 +34,7 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: 'show-log', description: 'Alias for /show logs' },
   { name: 'aliasonly', args: '[on|off]', description: "Claude Code's /model list shows only Aliases (hides Provider rows)" },
   { name: 'modelids', args: '[on|off]', description: "Alias rows in Claude Code's /model list carry their pinned model id" },
+  { name: 'guide', description: 'Learn Wisp from your first route through troubleshooting' },
   { name: 'help', description: 'List every command with its arguments' },
   { name: 'quit', description: 'Exit the TUI' },
 ];

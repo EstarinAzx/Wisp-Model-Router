@@ -24,9 +24,9 @@ import {
   type Provider, type RoutingMap, type FamilyKey, type Target,
 } from '@wisp/core';
 import { useTerminalDimensions } from '@opentui/react';
-import { ArtRows, flightWidth } from './flight';
-import { routeArt } from './flightArt';
+import { Lantern, flightWidth } from './flight';
 import { home } from './store';
+import { pickerProviders } from './providerScreens';
 import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
@@ -64,7 +64,6 @@ export const CLAUDE_FAMILY_MODELS: Record<FamilyKey, string> = {
 // ----------------------------------------- Screens ----------------------------------------- //
 
 // The /routing overview — two sections: Claude Code's Family routes, and the named Aliases.
-const traces = [routeArt(0), routeArt(1), routeArt(2)];
 export const RoutingScreen = ({ cols, onPick }: {
   cols: number;
   onPick: (section: RoutingSection) => void;
@@ -79,7 +78,7 @@ export const RoutingScreen = ({ cols, onPick }: {
   ];
   return <Panel title="Routing map">
     <box flexDirection="row" alignItems="center">
-      {illustrated && <box width={21} marginRight={2}><ArtRows rows={traces[selected]} /></box>}
+      {illustrated && <box width={21} marginRight={2}><Lantern scene={selected} /></box>}
       <box flexGrow={1}>
         <ChoiceList height={6} options={sections} selectedIndex={selected}
           onChange={setSelected} onSelect={index => onPick(sections[index].value)} />
@@ -216,7 +215,9 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
   onRename: (name: string) => void;
   onPick: (p: Provider) => void;
 }) => {
-  const trace = useRouteTrace(row, rowTarget(routingMap(), row));
+  const map = routingMap();
+  const trace = useRouteTrace(row, rowTarget(map, row));
+  const savedAlias = row.kind === 'alias' && map.aliases.some(alias => alias.name === row.name);
   return <Panel title={`Route ${rowLabel(row)} via...`}>
     {trace.view}
     <WrapSelect
@@ -227,13 +228,16 @@ export const RouteProviderScreen = ({ row, cols, onClear, onRename, onPick }: {
         // rename. Only for aliases already IN the map: the add-alias flow passes through here
         // before its row is persisted, and rename/remove on a nonexistent alias dead-ends.
         // Leading-space values can't collide with Provider ids (ids never start with a space).
-        ...(row.kind === 'alias' && routingMap().aliases.some((a) => a.name === (row as { name: string }).name)
+        ...(savedAlias
           ? [
-              { name: 'Rename alias', description: 'keep the Target, change the bridged name', value: ' rename' },
+              { group: 'Alias actions', name: 'Rename alias', description: 'keep the Target, change the bridged name', value: ' rename' },
               { name: 'Remove alias', description: 'delete this bridged name', value: ' clear' },
             ]
           : []),
-        ...PROVIDERS.map((p) => ({ name: p.label, description: p.id, value: p.id })),
+        ...pickerProviders.map((p, index) => ({
+          group: savedAlias && index === 0 ? 'Providers' : undefined,
+          name: p.label, description: p.id, value: p.id,
+        })),
         // A Family route is cleared, never renamed — its picker keeps clear at the bottom.
         ...(row.kind !== 'alias'
           ? [{ name: 'Clear route', description: row.kind === 'family' ? 'family falls back to the Active Provider' : 'remove this binding; Alias precedence still applies', value: ' clear' }]
@@ -285,7 +289,7 @@ const useRouteTrace = (row: RouteRow, assigned?: Target, proposed?: Target) => {
     <box width={wide ? sourceCols : '100%'} justifyContent="center">
       {sourceLines.map((part, i) => <text key={i} fg={ink.heading}><strong>{part}</strong></text>)}
     </box>
-    {wide && <box width={21} height={8}><ArtRows rows={traces[changed ? 2 : 0]} /></box>}
+    {wide && <box width={21} height={8}><Lantern scene={changed ? 2 : 0} /></box>}
     <box flexGrow={1} justifyContent={wide ? 'space-between' : 'flex-start'} paddingY={wide ? 1 : 0}>
       <box>{assignedLines}</box>
       {proposed && <box>{proposedLines}</box>}

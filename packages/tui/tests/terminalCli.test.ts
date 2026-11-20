@@ -287,7 +287,7 @@ test('TUI Codex saved rows remain editable and clear/Esc return to Codex', () =>
       assert(ui.captureCharFrame().includes('saved:missing'));
       await keys('RETURN');
       assert(ui.captureCharFrame().includes('via...'), ui.captureCharFrame());
-      await keys('ARROW_UP', 'ARROW_UP', 'RETURN'); // Custom is the last Provider, before Clear.
+      await keys('RETURN'); // Custom is the first Provider.
       await act(async () => { await new Promise(r => setTimeout(r, 30)); }); await ui.renderOnce();
       assert(ui.captureCharFrame().includes('type an id'), ui.captureCharFrame());
       await act(async () => ui.mockInput.typeText('edited-model')); await keys('RETURN');
@@ -391,4 +391,45 @@ test('logs and bare log are renderer-free session lists without store writes', (
     expect(result.out).toContain('No recent chat sessions');
     expect(readdirSync(home)).toEqual([]);
   }
+});
+
+test('guide chapters open, scroll, resize and return without changing an empty profile', () => {
+  const result = run(['--eval', `
+    import assert from 'node:assert/strict';
+    import { act, createElement } from 'react';
+    import { testRender } from '@opentui/react/test-utils';
+    globalThis.fetch = async () => { throw Error('Network is unavailable'); };
+    const { App } = await import('./src/app');
+    const ui = await testRender(createElement(App), { width: 80, height: 24, kittyKeyboard: true });
+    const frame = () => ui.captureCharFrame();
+    const key = async name => { await act(async () => ui.mockInput.pressKeys([name], name === 'ESCAPE' ? 50 : 0)); await ui.renderOnce(); };
+    try {
+      await ui.renderOnce();
+      assert(frame().includes('/guide to get started'), frame());
+      await act(async () => ui.mockInput.typeText('/gui'));
+      await ui.renderOnce();
+      assert(frame().includes('/guide'), frame());
+      await key('RETURN');
+      assert(frame().includes('Wisp guide'), frame());
+      await key('RETURN');
+      assert(frame().includes('Your first route') && frame().includes('/providers'), frame());
+      await act(async () => ui.resize(40, 14)); await ui.renderOnce();
+      for (let i = 0; i < 60 && !frame().includes('claude-wisp --model first'); i++) await key('ARROW_DOWN');
+      assert(frame().includes('claude-wisp --model first') && frame().includes('Esc back'), frame());
+      await key('RETURN');
+      assert(frame().includes('Your first route'), frame());
+      await key('ESCAPE');
+      assert(frame().includes('Wisp guide'), frame());
+      await key('ARROW_DOWN');
+      await key('RETURN');
+      assert(frame().includes('/key') || frame().includes('/providers'), frame());
+      await key('ESCAPE');
+      assert(frame().includes('Wisp guide') && frame().includes('› Providers'), frame());
+      await key('ESCAPE');
+      assert(frame().includes('Type / for commands'), frame());
+    } finally { await act(async () => ui.renderer.destroy()); }
+  `], join(root, 'packages/tui'));
+  expect(result.err).toBe('');
+  expect(result.code).toBe(0);
+  expect(readdirSync(home)).toEqual([]);
 });

@@ -21,7 +21,7 @@
  */
 
 import {
-  PROVIDERS, resolveKeyId, resolveModel, isGeminiApiProvider,
+  PROVIDERS, CUSTOM_ID, resolveKeyId, resolveModel, isGeminiApiProvider,
   isCodexProvider, isAnthropicProvider, isXaiProvider, isCodexSignedIn, isAnthropicSignedIn,
   isXaiSignedIn, anthropicAccountLabel, DEFAULT_EFFORT,
   isKimiProvider, isKimiSignedIn,
@@ -32,6 +32,12 @@ import { home, activeProvider } from './store';
 import { useTuiInk } from './theme';
 import { ChoiceList, Panel, onSubmitText, useInputColors } from './widgets';
 
+// Picker order is presentation only. The catalog's first row is the default Active Provider.
+export const pickerProviders = PROVIDERS.toSorted((a, b) => {
+  if ((a.id === CUSTOM_ID) !== (b.id === CUSTOM_ID)) return a.id === CUSTOM_ID ? -1 : 1;
+  return a.label.localeCompare(b.label, 'en');
+});
+
 // ----------------------------------------- Key + model storage ----------------------------------------- //
 
 // The OAuth kinds sign in instead of taking an API key — four browser flows plus Kimi's device flow (#170).
@@ -41,9 +47,9 @@ const isOAuthProvider = (p: Provider): boolean =>
   isCodexProvider(p) || isAnthropicProvider(p) || isXaiProvider(p) || isKimiProvider(p) || isAntigravityProvider(p);
 
 // Keyed rows only — the OAuth kinds sign in via /signin, they don't take keys.
-const keyedProviders = (): Provider[] => PROVIDERS.filter((p) => !isOAuthProvider(p));
+const keyedProviders = (): Provider[] => pickerProviders.filter((p) => !isOAuthProvider(p));
 
-export const oauthProviders = (): Provider[] => PROVIDERS.filter(isOAuthProvider);
+export const oauthProviders = (): Provider[] => pickerProviders.filter(isOAuthProvider);
 
 // Sync signed-in read for display — the pure check over the stored bundle (skips codex's async
 // CLI-import probe, so a never-used importable ~/.codex login reads signed out until first use).
@@ -122,7 +128,7 @@ export const ProvidersScreen = ({ onPick }: { onPick: (p: Provider) => void }) =
     {/* select collapses to zero rows without an explicit height; an option is 2 rows with description */}
     <ChoiceList
       height={Math.min(PROVIDERS.length * 2, 16)}
-      options={PROVIDERS.map((p) => {
+      options={pickerProviders.map((p) => {
         // keyed rows get the same at-a-glance status the OAuth rows always had (#106)
         const auth = oauthStatus(p) || keyStatus(p);
         return {

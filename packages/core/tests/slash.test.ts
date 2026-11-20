@@ -193,3 +193,8 @@ describe('completeSlash — Tab fill of the highlighted suggestion (#128)', () =
     expect(completeSlash('/pr', 99, cmds)).toBe('/providers');
   });
 });
+
+it('discovers the beginner guide alongside the command reference', () => {
+  expect(completeSlash('/gui', 0)).toBe('/guide');
+  expect(suggestSlash('/hel').map(c => c.name)).toEqual(['help']);
+});

@@ -47,6 +47,7 @@ export type Mode =
   // and can write auth.json — a side effect that must not live in JSX).
   | { kind: 'bridge'; address: string; secret: string }
   | { kind: 'help' }
+  | { kind: 'guide'; chapter?: number }
   | { kind: 'info'; title: string; lines: string[]; abort?: AbortController }
   | { kind: 'logs' }
   | { kind: 'log'; id: string }

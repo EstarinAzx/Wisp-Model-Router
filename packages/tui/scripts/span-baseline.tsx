@@ -37,6 +37,7 @@ import type { TestRendererSetup } from '@opentui/core/testing';
 // Env keys leak real machine state into keyStatus rows — scrub every catalog env var.
 let exitCode = 0;
 let destroy = () => {};
+process.env.WISP_REDUCED_MOTION = '1'; // Capture the still frame for byte-for-byte comparisons.
 try {
 for (const p of PROVIDERS) if (p.apiKeyEnv) delete process.env[p.apiKeyEnv];
 
@@ -213,24 +214,36 @@ await press(() => mockInput.pressBackspace(), 'backspace');
 
 // /providers list + both menu payload kinds (keyed row with stored key, OAuth row signed in)
 await run('/providers');
-await see('(active)', 'providers');
+await see('Custom', 'providers');
 await reactAct(async () => setup.resize(80, 24));
-await waitForFrame(f => f.includes('OpenCode Go (active)') && f.includes('Esc back') && f.includes('╯'));
+await waitForFrame(f => f.includes('Custom') && f.includes('Esc back') && f.includes('╯'));
 await reactAct(async () => setup.resize(80, 8));
 const compactProviders = await waitForFrame(f => f.split('\n')[0].length === 80 && f.includes('Providers'));
-assert(compactProviders.includes('OpenCode Go (active)'), 'the selected provider must fit in a one-row picker');
+assert(compactProviders.includes('Custom'), 'the selected provider must fit in a one-row picker');
 assert(compactProviders.includes('Esc back') && compactProviders.includes('q quit'), 'the picker controls must fit below the selected provider');
 await arrow('down');
-await waitForFrame(f => f.includes('OpenCode Zen'));
+await waitForFrame(f => f.includes('Anthropic'));
 await arrow('up');
+await reactAct(async () => setup.resize(42, 12));
+const narrowPicker = await waitForFrame(f => f.includes('Custom') && f.includes('q quit'));
+assert(narrowPicker.includes('Esc back'), 'narrow picker footer keeps the back and quit keys separate');
 await reactAct(async () => setup.resize(100, 40));
+// Navigate by visible name so catalog additions keep exercising the same provider.
+const highlightRow = async (label: string) => {
+  for (let n = 0; n <= PROVIDERS.length + 2; n++) {
+    if (selectionBand().includes(label)) return;
+    await arrow('down');
+  }
+  throw new Error('Could not highlight ' + label);
+};
+await highlightRow('OpenCode Go (active)');
 await waitForFrame(f => f.includes('opencode-go — key set'));
 
 await enter();
 await see('Use as Active Provider', 'provider-menu-keyed');
 await esc();
-await see('(active)', 'providers-return');
-for (let i = 0; i < 3; i++) await arrow('down');
+await see('Custom', 'providers-return');
+await highlightRow('Anthropic');
 await enter();
 await see('browser flow', 'provider-menu-oauth');
 await esc();
@@ -298,6 +311,7 @@ const providerEnd = await waitForFrame(f => f.includes('Clear route'));
 assert(providerEnd.includes('Enter choose') && providerEnd.includes('q quit'), 'provider picker footer must fit below the last action');
 await arrow('down');
 await reactAct(async () => setup.resize(100, 40));
+await highlightRow('OpenCode Go');
 gateModels();
 await enter();
 await see('Fetching models', 'route-model-loading');
@@ -317,6 +331,7 @@ assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-
 stubModels.push(...Array.from({ length: 24 }, (_, i) => ({ id: `stub-model-extra-${i}` })));
 stubModels.unshift({ id: 'a-long-model-' + 'x'.repeat(60) });
 await enter();
+await highlightRow('OpenCode Go');
 gateModels();
 await enter();
 await waitForFrame(f => f.includes('Fetching models'));
@@ -333,8 +348,7 @@ await reactAct(async () => setup.resize(100, 40));
 await esc();
 await enter();
 await see('Route opus via', 'route-provider-family-again');
-await arrow('up'); // wraps to Clear route
-await arrow('up'); // Custom
+await highlightRow('Custom');
 await enter();
 await see('no live list', 'route-model-free');
 await esc();
@@ -366,6 +380,15 @@ await enter();
 await see('New alias name', 'alias-name');
 await esc();
 await esc();
+await esc();
+
+// /guide is readable before setup and returns to the command input.
+await run('/guide');
+await see('Wisp guide', 'guide-index');
+await enter();
+await see('Your first route', 'guide-first-route');
+await esc();
+await waitForFrame(f => f.includes('Wisp guide'));
 await esc();
 
 // /help registry list

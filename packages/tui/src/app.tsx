@@ -54,6 +54,7 @@ import {
   RouteModelLoadingScreen, RouteConfirmScreen, RouteModelPickScreen, RouteModelFreeScreen,
 } from './routingScreens';
 import { PaletteScreen } from './paletteScreen';
+import { GuideScreen } from './guideScreen';
 import { TestScreen, streamTestReply } from './testScreen';
 import { BridgeScreen, HelpScreen, InfoScreen, LogScreen, SessionListScreen } from './infoScreens';
 import { copyText } from './clipboard';
@@ -532,6 +533,7 @@ export const App = () => {
       // Opens with the Bridge in any state (#122) — the Screen itself shows the not-running hint.
       case 'show-log': setMode({ kind: 'logs' }); return;
       case 'help': setMode({ kind: 'help' }); return;
+      case 'guide': setMode({ kind: 'guide' }); return;
       case 'quit': exitTui(); return;
       default: setStatus(`Unknown command: /${command}`);
     }
@@ -606,6 +608,7 @@ export const App = () => {
         : mode.kind === 'routing-section' ? setMode({ kind: 'routing' })
         : mode.kind === 'test' && mode.phase !== 'streaming' ? backToInput() // finished screen just closes
         : mode.kind === 'log' || mode.kind === 'logs' ? setMode(logBackMode(mode))
+        : mode.kind === 'guide' && mode.chapter !== undefined ? setMode({ kind: 'guide' })
         : mode.kind === 'bridge' || mode.kind === 'help' || mode.kind === 'info' ? backToInput() // info screens just close — nothing to cancel
         : backToInput();
       return;
@@ -705,6 +708,9 @@ export const App = () => {
       {mode.kind === 'log' && <LogScreen id={mode.id} cols={panelCols} />}
 
       {mode.kind === 'help' && <HelpScreen onDone={backToInput} />}
+      {mode.kind === 'guide' && <GuideScreen chapter={mode.chapter} cols={panelCols}
+        maxRows={termHeight - (framed ? 10 : 7) - feedback.length}
+        onRead={chapter => setMode({ kind: 'guide', chapter })} />}
 
       {mode.kind === 'info' && <InfoScreen title={mode.title} lines={mode.lines} cols={panelCols} maxRows={termHeight - 9 - feedback.length} pending={!!mode.abort} />}
 
@@ -786,7 +792,8 @@ export const App = () => {
           : '↑↓ select · Tab · Enter · Esc'}</text>}
       </box>}
       {isPicker && <box border={['top']} borderColor={RULE} marginTop={1} flexDirection="row" justifyContent="space-between">
-        <text fg={ink.note} wrapMode="none">↑↓ select   Enter choose   Esc back</text>
+        <text fg={ink.note} wrapMode="none">{panelCols >= 44
+          ? '↑↓ select   Enter choose   Esc back' : '↑↓ select  Enter  Esc back'}</text>
         <text fg={ink.note}>q quit</text>
       </box>}
       {feedback.length > 0 && <box marginTop={1} flexShrink={0}>

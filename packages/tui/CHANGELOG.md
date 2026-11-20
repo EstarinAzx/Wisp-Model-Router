@@ -6,6 +6,16 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Changes up to 2.0.10 are folded into the product changelog at
 `packages/vscode/CHANGELOG.md`.
 
+## [2.3.1]
+
+- The home flame flickers in place. A smaller animated flame follows the selected routing row and shows the assigned or proposed destination.
+- Provider pickers pin Custom first and sort the rest by display name. Existing aliases show separate action and provider headings.
+- Open `/guide` for a first-route walkthrough, setup, routing and troubleshooting. Use `/help` for the command list.
+
+### Surfaces
+
+- Terminal and npm package 2.3.1.
+
 ## [2.3.0] - 2026-11-20
 
 ### Changed
