@@ -67,6 +67,11 @@ const SSE_REPLY = 'data: {"choices":[{"delta":{"content":"Stub reply."}}]}\n\nda
 
 globalThis.fetch = (async (input: unknown) => {
   const url = String(input instanceof Request ? input.url : input);
+  if (url === 'https://models.dev/api.json') {
+    const models = Object.fromEntries(['opus', 'sonnet', 'haiku', 'fable'].map(family =>
+      [`claude-${family}-9-1`, { release_date: '2025-02-01' }]));
+    return Response.json({ anthropic: { models } });
+  }
   if (url.endsWith('/models')) {
     if (holdModels) await holdModels;
     return Response.json({ data: stubModels });
@@ -298,9 +303,11 @@ await arrow('down');
 assert(selectionBand().includes('Codex'));
 await arrow('up');
 await enter();
-await see('Bind Claude subscription models', 'routing-families');
+await see('claude-opus-9-1', 'routing-families');
 const familyTable = setup.captureCharFrame();
 assert(familyTable.split('\n').some(line => line.includes('opus') && line.includes('opencode-go / minimax-m3')));
+const actionRow = familyTable.split('\n').findIndex(line => line.includes('── Actions'));
+assert.equal(familyTable.split('\n')[actionRow - 1].replace(/│/g, '').trim(), '', 'one blank row above Actions');
 assert(familyTable.indexOf('Actions') > familyTable.indexOf('fable'));
 assert(familyTable.indexOf('Actions') < familyTable.indexOf('Bind Claude subscription models'));
 await enter();
@@ -326,7 +333,7 @@ await see('stub-model-a', 'route-revise');
 await enter();
 await waitForFrame(f => f.includes('Apply this route?'));
 await enter();
-await see('Bind Claude subscription models', 'route-applied');
+await see('claude-opus-9-1', 'route-applied');
 assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
 stubModels.push(...Array.from({ length: 24 }, (_, i) => ({ id: `stub-model-extra-${i}` })));
 stubModels.unshift({ id: 'a-long-model-' + 'x'.repeat(60) });
@@ -371,6 +378,10 @@ await waitForFrame(f => f.includes('↳ opencode-go / minimax-m3') && f.includes
 await reactAct(async () => setup.resize(100, 40));
 await enter();
 await see('Rename alias', 'route-provider-alias');
+const aliasPicker = setup.captureCharFrame().split('\n');
+const providersHeading = aliasPicker.findIndex(line => line.includes('── Providers'));
+assert(providersHeading > 0);
+assert.equal(aliasPicker[providersHeading - 1].replace(/│/g, '').trim(), '', 'one blank row above Providers');
 await enter();
 await see('Rename alias fast', 'alias-rename');
 await esc();
@@ -455,6 +466,20 @@ const routeLines = wrappedAlias.split('\n');
 const aliasLine = routeLines.findIndex(line => line.includes('abcdefghijklmno'));
 assert(aliasLine >= 0 && routeLines[aliasLine].includes('opencode-go'), 'align destination with the first alias line');
 assert(routeLines[aliasLine + 1].includes('pqrst'), 'keep the rest of the alias on its own physical line');
+
+// Visiting the family tracker only reads. Enter on Bind applies the four displayed targets together.
+await esc(); await esc();
+await reactAct(async () => setup.resize(100, 40));
+await run('/routing'); await enter();
+await waitForFrame(f => f.includes('claude-opus-9-1'));
+assert.equal(store.home.readConfig().routing?.families.opus?.model, 'stub-model-b');
+const aliasesBeforeBind = store.home.readConfig().routing?.aliases;
+await highlightRow('Bind Claude subscription models');
+await enter();
+await waitForFrame(f => f.includes('Families →'));
+for (const family of ['opus', 'sonnet', 'haiku', 'fable'] as const)
+  assert.deepEqual(store.home.readConfig().routing?.families[family], { providerId: 'anthropic', model: `claude-${family}-9-1` });
+assert.deepEqual(store.home.readConfig().routing?.aliases, aliasesBeforeBind);
 
 // ----------------------------------------- Baseline write / diff ----------------------------------------- //
 

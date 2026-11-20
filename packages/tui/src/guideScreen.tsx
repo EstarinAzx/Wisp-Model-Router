@@ -29,7 +29,7 @@ const chapters = [
   ] },
   { title: 'Routes and aliases', paragraphs: [
     'In Wisp, `/routing` maps a name requested by a client to a destination provider and model. The map has three sections.',
-    'Claude Code groups requests by family, such as Sonnet or Haiku. Select a family to set its destination. Clearing its explicit route returns that family to the Active Provider.',
+    'Claude Code groups requests by family, such as Sonnet or Haiku. Select a family to set its destination. Clearing its explicit route returns that family to the Active Provider. Bind Claude subscription models shows the latest stable IDs in the public catalog. Press Enter on Bind to apply all four. Your subscription determines access.',
     'Codex routes apply to an exact model name. Pick the client model you want to redirect, then choose its destination. An alias with the same name takes precedence.',
     'Custom holds aliases such as first. Select Add alias, enter a unique name, then pick a provider and model. Check the Proposed destination and press Enter to apply, or Esc to revise it.',
     'To edit a saved alias, select it. Choose a provider to change its destination, Rename alias to keep the destination under another name, or Remove alias to delete that name.',

@@ -433,3 +433,41 @@ test('guide chapters open, scroll, resize and return without changing an empty p
   expect(result.code).toBe(0);
   expect(readdirSync(home)).toEqual([]);
 });
+
+test('family lookup preserves saved routes offline and retries an incomplete cached catalog', () => {
+  const file = join(home, 'config.json');
+  const before = JSON.stringify({ routing: { families: { opus: { providerId: 'custom', model: 'mine' } }, aliases: [] } });
+  writeFileSync(file, before);
+  const result = run(['--eval', `
+    import assert from 'node:assert/strict';
+    import { act, createElement } from 'react';
+    import { testRender } from '@opentui/react/test-utils';
+    const { App } = await import('./src/app');
+    const { home } = await import('./src/store');
+    let calls = 0;
+    globalThis.fetch = async url => {
+      if (String(url) !== 'https://models.dev/api.json') throw Error('Offline');
+      calls++;
+      if (calls === 1) throw Error('Offline');
+      const families = calls === 2 ? ['opus'] : ['opus', 'sonnet', 'haiku', 'fable'];
+      return Response.json({ anthropic: { models: Object.fromEntries(families.map(f =>
+        ['claude-' + f + '-7', { release_date: '2025-01-01' }])) } });
+    };
+    const ui = await testRender(createElement(App), { width: 80, height: 24, kittyKeyboard: true });
+    const key = async name => { await act(async () => ui.mockInput.pressKeys([name])); await ui.renderOnce(); };
+    try {
+      await act(async () => ui.mockInput.typeText('/routing')); await key('RETURN'); await key('RETURN');
+      await ui.waitForFrame(f => f.includes('Retry Claude model lookup'));
+      for (let i = 0; i < 4; i++) await key('ARROW_DOWN');
+      await key('RETURN');
+      await ui.waitForFrame(f => f.includes('Retry Claude model lookup'));
+      assert.equal(calls, 2);
+      await key('RETURN');
+      await ui.waitForFrame(f => f.includes('claude-opus-7'));
+      assert.equal(calls, 3);
+      assert.equal(home.readConfig().routing.families.opus.model, 'mine');
+    } finally { await act(async () => ui.renderer.destroy()); }
+  `], join(root, 'packages/tui'));
+  expect(result.code).toBe(0);
+  expect(readFileSync(file, 'utf8')).toBe(before);
+});

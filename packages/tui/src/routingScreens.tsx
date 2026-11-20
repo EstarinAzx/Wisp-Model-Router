@@ -15,12 +15,12 @@
  *     and Esc step-back routing, importing the row helpers it needs from here.
  *
  * Extracted from app.tsx with #118: the eight routing-flow Screens plus the routing-row
- * helpers only this flow uses (routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS are
+ * helpers only this flow uses (routingMap, rowLabel, sectionOf are
  * shared with the shell's starters).
  */
 
 import {
-  PROVIDERS, FAMILY_KEYS, EMPTY_ROUTING_MAP, withAliasRenamed,
+  PROVIDERS, FAMILY_KEYS, EMPTY_ROUTING_MAP, withAliasRenamed, getModelsDevCatalog,
   type Provider, type RoutingMap, type FamilyKey, type Target,
 } from '@wisp/core';
 import { useTerminalDimensions } from '@opentui/react';
@@ -29,6 +29,7 @@ import { home } from './store';
 import { pickerProviders } from './providerScreens';
 import type { RouteRow, RoutingSection } from './modes';
 import { useEffect, useState } from 'react';
+import { latestClaudeFamilies, type ClaudeFamilyModels } from './claudeFamilyModels';
 import { codexRoutingRows, loadCodexRoutingCatalog, type CodexRoutingCatalog } from './codexRouting';
 import { commandFrameFits, useTuiInk } from './theme';
 import { ChoiceList, Panel, wrapWords, WrapSelect, type WrapOption, onSubmitText, useInputColors } from './widgets';
@@ -47,19 +48,6 @@ const rowTarget = (map: RoutingMap, row: RouteRow): Target | undefined =>
 // The /routing sub-screens step back one level on Esc/apply — to the SECTION they came from
 // (#79). Origin is derivable (family rows → Claude Code section, alias screens → Custom).
 export const sectionOf = (row: RouteRow): RoutingSection => row.kind === 'family' ? 'families' : row.kind === 'codex-model' ? 'codex' : 'aliases';
-
-// The one-tap "bind Claude subscription models" mapping: each Family route's natural Claude.ai
-// model. TUI-local data — promote to core if the side panel ever grows the same button.
-// STALE-BY-DESIGN: a hardcoded table the live picker cannot correct, so a new Claude release makes the
-// one-tap bind a silent DOWNGRADE (it overwrote fable with claude-fable-5 after claude-fable-5-1 shipped
-// 2026-09-01). Re-check alongside CLAUDE_CODE_VERSION whenever a family gains a release — those two pins
-// go stale on the same event.
-export const CLAUDE_FAMILY_MODELS: Record<FamilyKey, string> = {
-  opus: 'claude-opus-5',
-  sonnet: 'claude-sonnet-5',
-  haiku: 'claude-haiku-4-5',
-  fable: 'claude-fable-5-1',
-};
 
 // ----------------------------------------- Screens ----------------------------------------- //
 
@@ -98,10 +86,22 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
   section: RoutingSection;
   cols: number;
   onAddAlias: () => void;
-  onBind: () => void;
+  onBind: (models: ClaudeFamilyModels) => void;
   onPickRow: (row: RouteRow) => void;
 }) => {
   const ink = useTuiInk();
+  const [attempt, setAttempt] = useState(0);
+  // undefined while checking; null after an unavailable or incomplete response.
+  const [published, setPublished] = useState<ClaudeFamilyModels | null>();
+  useEffect(() => {
+    if (section !== 'families') return;
+    let visible = true;
+    setPublished(undefined);
+    void getModelsDevCatalog(undefined, attempt > 0).then(result => {
+      if (visible) setPublished(latestClaudeFamilies(result) ?? null);
+    });
+    return () => { visible = false; };
+  }, [section, attempt]);
   const [catalog, setCatalog] = useState<CodexRoutingCatalog>({ models: [], error: 'Discovering native Codex models…' });
   useEffect(() => {
     if (section !== 'codex') return;
@@ -134,8 +134,12 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
       ? map.aliases.map(alias => option(alias.name, destination(alias.target), 'alias:' + alias.name))
       : codexRoutingRows(map, catalog).map(row => option(row.name === row.id ? row.id : row.name + ' · ' + row.id,
           row.description, 'codex-model:' + row.id));
-  if (section === 'families') routes.push({ group: 'Actions', name: 'Bind Claude subscription models',
-    description: '  Route all four families to Anthropic (Claude.ai).', value: ' bind' });
+  if (section === 'families') routes.push({
+    group: 'Actions', name: published === null ? 'Retry Claude model lookup' : 'Bind Claude subscription models',
+    description: published ? 'Published · ' + FAMILY_KEYS.map(f => published[f]).join(' · ')
+      : published === null ? 'Full family list unavailable. Existing routes kept.' : 'Checking models.dev…',
+    value: ' bind',
+  });
   if (section === 'aliases') routes.push({ group: 'Actions', name: 'Add alias', description: '', value: 'add' });
   return <Panel title={section === 'families' ? 'Routing — Claude Code' : section === 'codex' ? 'Routing — Codex' : 'Routing — Custom'}>
     {section === 'codex' && catalog.error && wrapWords(`${catalog.error} Saved routes remain editable.`, cols).map((line, i) => <text key={i} wrapMode="none" flexShrink={0} fg={ink.note}>{line}</text>)}
@@ -147,7 +151,11 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
       onSelect={(_i, opt) => {
         const v = opt.value;
         if (v === 'add') { onAddAlias(); return; }
-        if (v === ' bind') { onBind(); return; }
+        if (v === ' bind') {
+          if (published) onBind(published);
+          else if (published === null) setAttempt(n => n + 1);
+          return;
+        }
         const key = v.slice(v.indexOf(':') + 1);
         onPickRow(v.startsWith('family:') ? { kind: 'family', family: key as FamilyKey } : { kind: v.startsWith('codex-model:') ? 'codex-model' : 'alias', name: key });
       }}

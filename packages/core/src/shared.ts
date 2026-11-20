@@ -21,7 +21,7 @@ export type ModelCaps = { contextInput?: number; maxOutput?: number; vision?: bo
 
 // The slices we read from models.dev's api.json (it carries more we ignore). Keyed by provider id
 // (e.g. "opencode-go", "groq"), each with a models map.
-type ModelsDevEntry = { limit?: { context?: number; output?: number }; modalities?: { input?: string[] }; release_date?: string };
+type ModelsDevEntry = { limit?: { context?: number; output?: number }; modalities?: { input?: string[] }; release_date?: string; status?: string };
 export type ModelsDevCatalog = Record<string, { models?: Record<string, ModelsDevEntry> }>;
 
 // Map one models.dev entry to ModelCaps. Vision = its input modalities include "image" (the reliable

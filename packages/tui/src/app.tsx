@@ -13,7 +13,7 @@
  *   - ./providerScreens: the ten provider-flow Screens + that flow's helpers (#117) — the
  *     shell imports the Screens plus fetchModelOptions, oauthProviders, saveKey.
  *   - ./routingScreens: the eight routing-flow Screens + that flow's row helpers (#118) — the
- *     shell imports the Screens plus routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS.
+ *     shell imports the Screens plus routingMap, rowLabel, sectionOf.
  *   - ./paletteScreen: the palette Screen (#119) — the shell keeps line/selIdx and Enter semantics.
  *   - ./testScreen: the test Screen + streamTestReply (#119) — re-exported below for headless use.
  *   - ./infoScreens: the static bridge/help info Screens (#119).
@@ -34,6 +34,7 @@ import {
   FAMILY_KEYS, withFamilyRoute, withAlias, withoutAlias, withCodexModelRoute,
   type Provider, type EffortLevel, type Target,
 } from '@wisp/core';
+import type { ClaudeFamilyModels } from './claudeFamilyModels';
 import { fetchEffortOptions } from './modelFetch';
 import { home, activeProvider, codexAuth, anthropicAuth, xaiAuth, kimiAuth, antigravityAuth, quotaCurrent } from './store';
 import { detectExternalBridge } from './bridgePresence';
@@ -49,7 +50,7 @@ import {
   ModelPickScreen, ModelFreeScreen, OauthPickScreen, SigninWaitScreen, EffortPickScreen,
 } from './providerScreens';
 import {
-  routingMap, rowLabel, sectionOf, CLAUDE_FAMILY_MODELS,
+  routingMap, rowLabel, sectionOf,
   RoutingScreen, RoutingSectionScreen, AliasNameScreen, AliasRenameScreen, RouteProviderScreen,
   RouteModelLoadingScreen, RouteConfirmScreen, RouteModelPickScreen, RouteModelFreeScreen,
 } from './routingScreens';
@@ -72,7 +73,7 @@ import pkg from '../package.json';
 // ----------------------------------------- /routing ----------------------------------------- //
 
 // The routing-row helpers moved to routingScreens.tsx with #118 — the shell's starters import
-// routingMap/rowLabel/sectionOf/CLAUDE_FAMILY_MODELS from there.
+// routingMap/rowLabel/sectionOf from there.
 
 // ----------------------------------------- /test ----------------------------------------- //
 
@@ -300,14 +301,14 @@ export const App = () => {
 
   // The families screen's one-tap bind: point all four Family routes at the Anthropic subscription
   // models. Signed out → run the browser sign-in first and bind the moment the tokens land.
-  const bindClaudeFamilies = () => {
+  const bindClaudeFamilies = (models: ClaudeFamilyModels) => {
     const p = PROVIDERS.find(isAnthropicProvider);
     if (!p) return;
     const apply = () => reportActionError(() => {
       // withFamilyRoute can't refuse here — the Target names a catalog row by construction.
       home.updateConfig(cfg => {
         let map = cfg.routing ?? EMPTY_ROUTING_MAP;
-        for (const f of FAMILY_KEYS) map = withFamilyRoute(map, PROVIDERS, f, { providerId: p.id, model: CLAUDE_FAMILY_MODELS[f] })!;
+        for (const f of FAMILY_KEYS) map = withFamilyRoute(map, PROVIDERS, f, { providerId: p.id, model: models[f] })!;
         return { ...cfg, routing: map };
       });
       // short on purpose — the status row is single-line chrome that clips on narrow terminals

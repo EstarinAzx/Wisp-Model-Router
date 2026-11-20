@@ -170,22 +170,28 @@ export const WrapSelect = ({ options, cols, maxRows, onSelect }: {
     else if (key.name === 'return' || key.name === 'enter') onSelect(sel, options[sel]);
   });
   const items = options.map((o) => ({ o, lines: o.lines ?? [o.name, ...wrapWords(o.description, Math.max(1, cols - 2))] }));
-  const rowHeight = (item: typeof items[number]) => item.lines.length + (item.o.group ? 1 : 0);
-  const rowsOf = (from: number, to: number) => items.slice(from, to + 1).reduce((n, it) => n + rowHeight(it), 0);
+  const rowHeight = (item: typeof items[number], first: boolean) =>
+    item.lines.length + (item.o.group ? (first ? 1 : 2) : 0);
+  const rowsOf = (from: number, to: number) => items.slice(from, to + 1).reduce((n, it, i) => n + rowHeight(it, i === 0), 0);
   // Window: pull the view up to the selection, else push it down until the selection fits.
   if (sel < top.current) top.current = sel;
   while (rowsOf(top.current, sel) > maxRows && top.current < sel) top.current++;
   // Fill downward until the row budget is spent (the selected item always shows, however tall).
   let end = top.current;
-  for (let used = 0; end < items.length && (end === top.current || used + rowHeight(items[end]) <= maxRows); end++)
-    used += rowHeight(items[end]);
+  let used = 0;
+  for (; end < items.length; end++) {
+    const first = end === top.current;
+    const rows = rowHeight(items[end], first);
+    if (!first && used + rows > maxRows) break;
+    used += rows;
+  }
   return (
     <box flexDirection="column">
       {top.current > 0 && <text wrapMode="none" flexShrink={0} fg={ink.note}>{`  … ${top.current} more`}</text>}
       {items.slice(top.current, end).flatMap(({ o, lines }, k) => {
         const i = top.current + k;
         const on = i === sel;
-        const heading = o.group && <text key={'group:' + o.value} height={1} fg={ink.heading}>
+        const heading = o.group && <text key={'group:' + o.value} marginTop={k ? 1 : 0} height={1} fg={ink.heading}>
           <span fg={ink.note}>── </span><strong>{o.group}</strong>
         </text>;
         return [heading, ...lines.map((line, j) => {
