@@ -19,7 +19,7 @@ _Updated 2026-11-20 by Codex. Published commit `18a4ac4ee28b6c97ec430d2ce1fdeea6
 - All four optional npm platform packages were absent from registry metadata during verification; the main npm shell was published with correct version pins and latest tag. GitHub assets are available for every target. Windows fallback was exercised; other hosts' fallback downloads were not run locally.
 - Per [[review-policy]], stamp checkpoint `wisp-2.3.1-claude-stamp` and release checkpoint `release-wisp-2.3.1` passed at 1/3 CLI runs each with zero issues. The automatic PR review completed with no actionable comments. No review is pending.
 - Evidence lives under `out/release-2.3.1/` in the `feat/wisp-2.3.1` worktree: `review.json` links earlier checkpoints, `published/verification.json` records artifacts/npm, and `published/fallback-verification.json` records the Windows fallback. Use `git worktree list` to locate it. The primary checkout owns the versioned handoff.
-- Global installation was not requested or changed. The user's Bridge state, settings and credentials were preserved. Last verified installation remains 2.3.0 / 1.14.13 below.
+- Khitarashi subsequently requested installation of both release surfaces; the verified installation state is below.
 
 ## Previous release and review (2.3.0)
 
@@ -30,13 +30,14 @@ _Updated 2026-11-20 by Codex. Published commit `18a4ac4ee28b6c97ec430d2ce1fdeea6
 
 ## Local installation
 
-- At the previous installation check, the global npm command reported `wisp-router 2.3.0`. Its Windows optional-package binary matches the published SHA-256. VS Code lists `esarinazx.wisp@1.14.13`. The installed extension and webview bundles match the published VSIX.
-- Wisp's `config.json` and `auth.json` hashes matched before and after each installation. Port 41184 had no listener before installation, after each installer, or at final verification. No Bridge command or VS Code reload was issued. Activation inside an already-open editor window was not tested.
-- Installation evidence is in the primary checkout at `.claude/wisp-2.3.0/installation.json`. Publication checks are in the release worktree at `out/release-2.3.0/published/verification.json`. The unrelated edit to `.context/flows.md` was preserved.
+- Khitarashi requested both updates after publication. Global `wisp --version` and npm report **2.3.1**; VS Code lists **esarinazx.wisp@1.14.14**. The installed Windows optional-package binary matches the published SHA-256, and the installed extension/webview bundles exactly match the released VSIX.
+- Installed from the verified published npm archive and VSIX. Evidence is in the primary checkout at `.claude/wisp-2.3.1/installation.json`, with installer logs and the pre-installation hashes alongside it.
+- Credentials and VS Code user settings remained byte-identical. A separately opened local test-build TUI changed `.wisp/config.json` during installation; its current edits were preserved, with no config rollback. Port 41184 had no listener before or after installation; no Bridge start/stop or editor reload was issued.
+- An already-open window was running `out/wisp-231/wisp.exe` from the feature worktree. Reopen via the installed `wisp` command for the released build. Activation inside an open editor window was not tested. The unrelated `.context/flows.md` edit remains untouched.
 
 ## Pick up here
 
-No active release work. Wait for khitarashi's next instruction. Install 2.3.1 only if requested; keep the Bridge in the user's chosen state. Earlier held work, including separate provider investigations, remains in [[release-follow-ups]].
+No active work. Wisp 2.3.1 and companion 1.14.14 are released and installed. Wait for khitarashi's next instruction and keep the Bridge in the user's chosen state. Earlier held work, including separate provider investigations, remains in [[release-follow-ups]].
 
 ## Related
 
