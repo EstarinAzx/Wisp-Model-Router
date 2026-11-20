@@ -6,7 +6,7 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Changes up to 2.0.10 are folded into the product changelog at
 `packages/vscode/CHANGELOG.md`.
 
-## [2.3.1]
+## [2.3.1] - 2026-11-20
 
 - Routing groups have a blank line between sections. Claude family binding shows current stable model IDs from the public Anthropic catalog on models.dev and applies them together when selected. An unavailable or incomplete catalog leaves routes intact.
 
@@ -16,7 +16,7 @@ Changes up to 2.0.10 are folded into the product changelog at
 
 ### Surfaces
 
-- Terminal and npm package 2.3.1.
+- **Terminal/npm 2.3.1** ships the TUI changes and updates the shared Claude Code request stamp to **2.1.329**. **Companion VSIX 1.14.14** bundles the shared stamp and catalog updates. Slot plugin **1.7.6** and Desktop protocol **5** are unchanged.
 
 ## [2.3.0] - 2026-11-20
 
