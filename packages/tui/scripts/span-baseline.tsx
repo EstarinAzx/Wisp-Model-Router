@@ -392,6 +392,22 @@ await esc();
 await run('/bridge off');
 await waitForFrame(f => f.includes('Bridge idle') && !f.includes('Bridge up'));
 
+// A wrapped alias is one selectable route; its destination starts on the first physical line.
+store.home.updateConfig(config => ({ ...config, routing: { ...config.routing!, aliases: [
+  { ...config.routing!.aliases[0], name: 'abcdefghijklmnopqrst' },
+] } }));
+await reactAct(async () => setup.resize(50, 24));
+await run('/routing');
+await waitForFrame(f => f.includes('Routing map'));
+await arrow('down');
+await arrow('down');
+await enter();
+const wrappedAlias = await waitForFrame(f => f.includes('Add alias'));
+const routeLines = wrappedAlias.split('\n');
+const aliasLine = routeLines.findIndex(line => line.includes('abcdefghijklmno'));
+assert(aliasLine >= 0 && routeLines[aliasLine].includes('opencode-go'), 'align destination with the first alias line');
+assert(routeLines[aliasLine + 1].includes('pqrst'), 'keep the rest of the alias on its own physical line');
+
 // ----------------------------------------- Baseline write / diff ----------------------------------------- //
 
 let failed = false;

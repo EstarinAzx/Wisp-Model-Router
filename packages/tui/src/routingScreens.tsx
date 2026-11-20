@@ -116,7 +116,7 @@ export const RoutingSectionScreen = ({ section, cols, onAddAlias, onBind, onPick
   const sourceWidth = section === 'families' ? 10 : Math.min(22, Math.floor(cols / 3));
   const destWidth = Math.max(1, cols - sourceWidth - 5);
   const option = (name: string, target: string, value: string): WrapOption => {
-    const wrap = (text: string, width: number): string[] => Bun.wrapAnsi(text, Math.max(1, width), { hard: true }).split('\\n');
+    const wrap = (text: string, width: number): string[] => Bun.wrapAnsi(text, Math.max(1, width), { hard: true }).split('\n');
     const source = wrap(name, wide ? sourceWidth : cols - 2);
     const dest = wrap(target, wide ? destWidth : cols - 4);
     const lines = wide ? Array.from({ length: Math.max(source.length, dest.length) }, (_, i) => {
