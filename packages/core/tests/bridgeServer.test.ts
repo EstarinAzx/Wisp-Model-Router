@@ -690,7 +690,7 @@ describe('Bridge — Antigravity rate limits (#190)', () => {
     error: { code: 429, message: 'Resource has been exhausted (e.g. check quota).', status: 'RESOURCE_EXHAUSTED' },
   }), { status: 429, headers });
 
-  it('returns generic 429 after bounded retries and keeps aliases pinned during cooldown', async () => {
+  it('surfaces untimed RESOURCE_EXHAUSTED once per request and keeps aliases pinned during cooldown', async () => {
     const state = countingFetch(() => generic429()), lines: string[] = [];
     await runServer(antigravityDeps({ log: line => lines.push(line), routingMap: () => ({ families: {},
       aliases: [{ name: 'custom model', target: { providerId: 'antigravity', model: 'gemini-3.8-flash-tiered' } }],
@@ -699,18 +699,20 @@ describe('Bridge — Antigravity rate limits (#190)', () => {
         const res = await post(port, '/v1/messages', { model: 'custom model', max_tokens: 32, stream: true, messages: [{ role: 'user', content: 'hi' }] });
         expect(res.status).toBe(429);
         expect(JSON.parse(res.body).error.type).toBe('rate_limit_error');
+        expect(JSON.parse(res.body).error.message).toContain('https://antigravity.google/docs/faq');
         expect(res.headers['retry-after']).toBeUndefined();
+        expect(res.headers['x-should-retry']).toBe('false');
       }
     });
-    expect(state.calls).toBe(24);
-    expect(lines.filter(line => line.includes('retrying in'))).toHaveLength(8);
+    expect(state.calls).toBe(4);
+    expect(lines.filter(line => line.includes('retrying in'))).toHaveLength(0);
     expect(lines.filter(line => line.includes('repeated transient failures'))).toHaveLength(1);
     expect(lines.some(line => line.includes('quota exhausted'))).toBe(false);
   });
 
-  it('can recover from a generic 429 before the retry budget is exhausted', async () => {
+  it('can recover from a 429 with an explicit immediate retry hint', async () => {
     let calls = 0;
-    vi.stubGlobal('fetch', async () => ++calls <= 2 ? generic429() : new Response(
+    vi.stubGlobal('fetch', async () => ++calls <= 2 ? generic429({ 'Retry-After': '0' }) : new Response(
       'data: {"response":{"candidates":[{"content":{"parts":[{"text":"recovered"}]},"finishReason":"STOP"}]}}\n\n',
     ));
     await runServer(antigravityDeps(), async port => {

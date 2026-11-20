@@ -1284,6 +1284,11 @@ export const createBridgeServer = (deps: BridgeDeps) => {
     } catch (err) {
       // Head already out (mid-stream failure) → the shared answer writes a proper Anthropic `error` event so
       // Claude Code shows the real message instead of "empty or malformed"; otherwise a clean status.
+      const failure = antigravityFailureOf(err);
+      // Claude otherwise starts another retry loop after the Bridge has finished its own.
+      if (!res.headersSent && failure?.status === 429 && failure.retryAfterMs === undefined) {
+        res.setHeader('x-should-retry', 'false');
+      }
       failProviderRequest(res, provider, model, err, controller, executorFor(provider), anthropicErrorFrame);
     }
   };

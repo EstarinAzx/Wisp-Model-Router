@@ -73,8 +73,8 @@ const fingerprint = (value: unknown): string =>
 
 /*
  * POST one conversation and return the raw Response, walking the host chain: daily, then production.
- * Transport errors, untimed 429s and capacity 503s move to the next host; timed 429s surface so the Bridge
- * can honor their delay. The body is built ONCE: re-minting the request id per host
+ * Transport errors, retryable untimed 429s and capacity 503s move to the next host. Other 429s surface
+ * with the provider's retry guidance. The body is built ONCE: re-minting the request id per host
  * would make the two attempts look like different turns to the upstream.
  *
  * Shared by antigravityStream and antigravityRequest.
@@ -146,8 +146,9 @@ const antigravityFetch = async (args: AntigravityRequestArgs, stream: boolean, s
     }
     const errBody = await res.text().catch(() => '');
     const error = antigravityApiError(res.status, errBody, res.headers.get('retry-after'));
-    // A timed 429 goes back to the Bridge's bounded retry; immediately walking hosts would ignore its wait.
-    if (antigravityFailureOf(error)?.retryAfterMs !== undefined) throw error;
+    // Both hosts serve the same account. Respect a refusal or retry delay before considering failover.
+    const failure = antigravityFailureOf(error);
+    if (failure?.retryable === false || failure?.retryAfterMs !== undefined) throw error;
     if (!isLast && antigravityShouldTryNextHost(res.status, errBody)) continue;
     throw error;
   }
